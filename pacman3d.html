@@ -21,9 +21,9 @@
   #right { text-align:right; }
 
   /* ---- Minimap ---- */
-  #minimap { position:fixed; top:48px; right:12px; width:130px; height:130px;
+  #minimap { position:fixed; top:48px; right:12px; width:110px; height:110px;
     border:2px solid #2030a0; border-radius:6px; background:rgba(0,0,10,.55);
-    z-index:5; image-rendering:pixelated; }
+    z-index:5; image-rendering:pixelated; pointer-events:none; }
 
   /* ---- Overlays ---- */
   .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center;
@@ -76,7 +76,8 @@
      Mangez une <b style="color:#ffb8ff">super-pastille</b> pour pouvoir les dévorer.</p>
   <div class="keys">
     🖥️ <b>ZQSD / Flèches</b> pour avancer · <b>Souris</b> pour regarder<br>
-    📱 <b>Joystick</b> à gauche · <b>glissez</b> à droite pour regarder
+    📱 <b>Joystick</b> à gauche · <b>glissez</b> à droite pour regarder<br>
+    <span style="opacity:.7">Sur iPhone : tournez en <b>paysage</b> et ajoutez la page à l'écran d'accueil pour le plein écran.</span>
   </div>
   <button class="btn" id="startBtn">JOUER</button>
 </div>
@@ -114,6 +115,9 @@ let powerPellets = [];             // super-pastilles (meshes individuels)
 let ghosts = [];
 let playerSpawn, ghostHome;
 let running = false, paused = true;
+
+// iPhone / iPad / Android : détection tactile robuste (iPadOS se fait parfois passer pour un Mac)
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints||0) > 0;
 
 const player = { x:0, z:0, yaw:0, pitch:0 };
 let score = 0, lives = 3, level = 1, pelletsLeft = 0, frightTimer = 0;
@@ -549,7 +553,7 @@ addEventListener('keyup',   e=>{ keys.delete(e.key.toLowerCase()); });
 
 // souris (pointer lock)
 const cv = $('game');
-cv.addEventListener('click', ()=>{ if(running && !('ontouchstart' in window)) cv.requestPointerLock(); });
+cv.addEventListener('click', ()=>{ if(running && !IS_TOUCH) cv.requestPointerLock(); });
 addEventListener('mousemove', e=>{
   if(document.pointerLockElement===cv){
     player.yaw   += e.movementX*0.0024;
@@ -561,9 +565,10 @@ addEventListener('mousemove', e=>{
 // tactile
 const joy = { active:false, x:0, y:0, id:null, cx:0, cy:0 };
 const knob = $('knob'), joyEl = $('joy');
-function joyStart(e){ const t=e.changedTouches[0]; joy.id=t.identifier; joy.active=true;
+function joyStart(e){ e.preventDefault(); const t=e.changedTouches[0]; joy.id=t.identifier; joy.active=true;
   const rect=joyEl.getBoundingClientRect(); joy.cx=rect.left+rect.width/2; joy.cy=rect.top+rect.height/2; joyMove(e); }
 function joyMove(e){
+  e.preventDefault();
   for(const t of e.changedTouches){ if(t.identifier===joy.id){
     let dx=t.clientX-joy.cx, dy=t.clientY-joy.cy; const max=55, d=Math.hypot(dx,dy);
     if(d>max){ dx*=max/d; dy*=max/d; }
@@ -580,8 +585,8 @@ joyEl.addEventListener('touchcancel',joyEnd);
 
 const look = { id:null, x:0, y:0 };
 const lookpad = $('lookpad');
-lookpad.addEventListener('touchstart',e=>{ const t=e.changedTouches[0]; look.id=t.identifier; look.x=t.clientX; look.y=t.clientY; },{passive:false});
-lookpad.addEventListener('touchmove',e=>{ for(const t of e.changedTouches){ if(t.identifier===look.id){
+lookpad.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; look.id=t.identifier; look.x=t.clientX; look.y=t.clientY; },{passive:false});
+lookpad.addEventListener('touchmove',e=>{ e.preventDefault(); for(const t of e.changedTouches){ if(t.identifier===look.id){
   player.yaw += (t.clientX-look.x)*0.006;
   player.pitch -= (t.clientY-look.y)*0.006;
   player.pitch = Math.max(-1.2,Math.min(1.2,player.pitch));
@@ -591,10 +596,22 @@ lookpad.addEventListener('touchend',e=>{ for(const t of e.changedTouches){ if(t.
 // =================================================================
 //  Audio (WebAudio simple)
 // =================================================================
-let actx=null;
-function beep(freq, dur){
+let actx=null, muted=false;
+// iOS : l'AudioContext démarre "suspended" et doit être débloqué dans un geste utilisateur
+function unlockAudio(){
   try{
     if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended') actx.resume();
+    // petit buffer muet pour finaliser le déblocage sur iOS
+    const b=actx.createBuffer(1,1,22050), s=actx.createBufferSource();
+    s.buffer=b; s.connect(actx.destination); s.start(0);
+  }catch(e){}
+}
+function beep(freq, dur){
+  if(muted) return;
+  try{
+    if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended') actx.resume();
     const o=actx.createOscillator(), g=actx.createGain();
     o.frequency.value=freq; o.type='square';
     g.gain.value=0.05; o.connect(g); g.connect(actx.destination);
@@ -646,35 +663,50 @@ function loop(){
   renderer.render(scene, camera);
 }
 
-function init(){
-  renderer = new THREE.WebGLRenderer({ canvas:$('game'), antialias:true });
+function resize(){
+  // iOS Safari : la barre d'adresse change innerHeight -> on lit visualViewport si possible
+  const vv = window.visualViewport;
+  const w = Math.round(vv ? vv.width : innerWidth);
+  const h = Math.round(vv ? vv.height : innerHeight);
+  // limite la résolution (les iPhone ont un devicePixelRatio de 3) pour la fluidité
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(w, h, true);
+  if(camera){ camera.aspect = w/h; camera.updateProjectionMatrix(); }
+}
+
+function init(){
+  renderer = new THREE.WebGLRenderer({ canvas:$('game'), antialias:!IS_TOUCH, powerPreference:'high-performance' });
   clock = new THREE.Clock();
   minimap = $('minimap'); mmCtx = minimap.getContext('2d');
 
-  if('ontouchstart' in window) document.body.classList.add('touch');
+  if(IS_TOUCH) document.body.classList.add('touch');
 
-  addEventListener('resize', ()=>{
-    if(!camera) return;
-    camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
+  addEventListener('resize', resize);
+  addEventListener('orientationchange', ()=> setTimeout(resize, 250));
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 
-  $('startBtn').addEventListener('click', ()=>{
+  // iOS : empêche le zoom pincé et le double-tap qui casseraient la vue
+  ['gesturestart','gesturechange','gestureend'].forEach(ev=>
+    document.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
+  let lastTouch=0;
+  document.addEventListener('touchend', e=>{
+    const now=Date.now(); if(now-lastTouch<350) e.preventDefault(); lastTouch=now;
+  }, {passive:false});
+
+  function start(){
+    unlockAudio();                 // débloque le son dans le geste utilisateur (obligatoire sur iOS)
     $('startScreen').classList.add('hidden');
-    newGame();
-    if(!('ontouchstart' in window)) cv.requestPointerLock();
-  });
-  $('againBtn').addEventListener('click', ()=>{
     $('endScreen').classList.add('hidden');
     newGame();
-    if(!('ontouchstart' in window)) cv.requestPointerLock();
-  });
+    if(!IS_TOUCH) cv.requestPointerLock();
+  }
+  $('startBtn').addEventListener('click', start);
+  $('againBtn').addEventListener('click', start);
 
   // scène vide pour le rendu avant de jouer
   scene = new THREE.Scene(); scene.background=new THREE.Color(0x05060f);
   camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 400);
+  resize();
   loop();
 }
 

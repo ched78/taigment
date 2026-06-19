@@ -42,6 +42,12 @@
   }
   #hud .label { color: #ffcc00; }
   #lives { display: flex; gap: 6px; align-items: center; }
+  #muteBtn {
+    background: none; border: none; cursor: pointer;
+    font-size: clamp(16px, 4.5vw, 22px); line-height: 1;
+    padding: 2px 4px; margin-left: 4px; filter: grayscale(0);
+  }
+  #muteBtn.off { opacity: 0.45; filter: grayscale(1); }
   #lives .pac { width: 16px; height: 16px; border-radius: 50%; background: #ffe000; display: inline-block;
     clip-path: polygon(100% 25%, 45% 50%, 100% 75%, 50% 100%, 0 50%, 50% 0); }
   canvas {
@@ -97,6 +103,7 @@
     <div><span class="label">SCORE</span> <span id="score">0</span></div>
     <div><span class="label">BEST</span> <span id="best">0</span></div>
     <div id="lives"></div>
+    <button id="muteBtn" title="Son on/off">🔊</button>
   </div>
   <canvas id="game"></canvas>
 </div>
@@ -271,6 +278,167 @@
     }
   }
 
+  // ---------- Audio (Web Audio API, sons synthétisés) ----------
+  // Tout est généré à la volée : aucun fichier externe, fonctionne hors-ligne.
+  const Audio = (function () {
+    let ctx = null;
+    let master = null;
+    let muted = localStorage.getItem("pacman_muted") === "1";
+    let unlocked = false;
+
+    function ensure() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 0.6;
+      master.connect(ctx.destination);
+    }
+
+    // iOS suspend le contexte tant qu'aucun geste n'a eu lieu : à appeler sur tap/clic.
+    function unlock() {
+      ensure();
+      if (!ctx) return;
+      if (ctx.state === "suspended") ctx.resume();
+      if (!unlocked) {
+        // un bip muet "réveille" le pipeline audio iOS
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        g.gain.value = 0.0001;
+        o.connect(g); g.connect(master);
+        o.start(); o.stop(ctx.currentTime + 0.02);
+        unlocked = true;
+      }
+    }
+
+    // Joue une note simple
+    function tone(freq, t0, dur, type, vol, dest) {
+      if (!ctx) return;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type || "square";
+      o.frequency.setValueAtTime(freq, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(dest || master);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+      return o;
+    }
+
+    function now() { return ctx ? ctx.currentTime : 0; }
+
+    // --- Effets sonores ---
+    let wakaFlip = false;
+    const sfx = {
+      waka() {
+        if (!ctx || muted) return;
+        wakaFlip = !wakaFlip;
+        tone(wakaFlip ? 520 : 380, now(), 0.07, "square", 0.25);
+      },
+      pellet() {
+        if (!ctx || muted) return;
+        const t = now();
+        tone(660, t, 0.12, "square", 0.3);
+        tone(880, t + 0.06, 0.12, "square", 0.3);
+      },
+      eatGhost() {
+        if (!ctx || muted) return;
+        const t = now();
+        for (let i = 0; i < 6; i++) tone(300 + i * 160, t + i * 0.05, 0.08, "sawtooth", 0.3);
+      },
+      fruit() {
+        if (!ctx || muted) return;
+        const t = now();
+        tone(1046, t, 0.1, "triangle", 0.3);
+        tone(1318, t + 0.1, 0.14, "triangle", 0.3);
+      },
+      death() {
+        if (!ctx || muted) return;
+        const t = now();
+        // glissando descendant
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sawtooth";
+        o.frequency.setValueAtTime(700, t);
+        o.frequency.exponentialRampToValueAtTime(90, t + 1.1);
+        g.gain.setValueAtTime(0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+        o.connect(g); g.connect(master);
+        o.start(t); o.stop(t + 1.15);
+      },
+      start() {
+        if (!ctx || muted) return;
+        const t = now();
+        const notes = [523, 587, 659, 784, 1046];
+        notes.forEach((f, i) => tone(f, t + i * 0.12, 0.12, "square", 0.28));
+      },
+      level() {
+        if (!ctx || muted) return;
+        const t = now();
+        const notes = [659, 784, 1046, 784, 1046, 1318];
+        notes.forEach((f, i) => tone(f, t + i * 0.1, 0.12, "triangle", 0.28));
+      },
+    };
+
+    // --- Musique de fond (boucle, planificateur à lookahead) ---
+    // Petite mélodie inspirée de l'ambiance arcade, en boucle.
+    const SEQ = [
+      // [note Hz, durée en temps], 0 = silence
+      [330,0.5],[392,0.5],[523,0.5],[330,0.5],[392,0.5],[523,0.5],[587,0.5],[523,0.5],
+      [494,0.5],[392,0.5],[440,0.5],[392,0.5],[330,0.5],[392,0.5],[523,0.5],[0,0.5],
+      [262,0.5],[330,0.5],[392,0.5],[262,0.5],[330,0.5],[392,0.5],[440,0.5],[392,0.5],
+      [349,0.5],[294,0.5],[330,0.5],[294,0.5],[262,0.5],[294,0.5],[330,0.5],[0,0.5],
+    ];
+    const BASS = [131,131,165,165,147,147,131,131]; // ligne de basse simple
+    const BEAT = 0.16; // durée d'un "temps" (tempo)
+    let musicOn = false;
+    let schedTimer = null;
+    let nextTime = 0;
+    let step = 0;
+
+    function scheduler() {
+      if (!ctx || !musicOn) return;
+      const ahead = 0.3;
+      while (nextTime < ctx.currentTime + ahead) {
+        const [f, d] = SEQ[step % SEQ.length];
+        const dur = d * BEAT * 2;
+        if (f > 0 && !muted) tone(f, nextTime, dur * 0.9, "square", 0.10, master);
+        // basse toutes les 4 notes
+        if (step % 2 === 0 && !muted) {
+          const bf = BASS[(step / 2) % BASS.length];
+          tone(bf, nextTime, BEAT * 1.6, "triangle", 0.12, master);
+        }
+        nextTime += dur;
+        step++;
+      }
+    }
+
+    function startMusic() {
+      ensure();
+      if (!ctx) return;
+      if (musicOn) return;
+      musicOn = true;
+      nextTime = ctx.currentTime + 0.1;
+      schedTimer = setInterval(scheduler, 60);
+    }
+    function stopMusic() {
+      musicOn = false;
+      if (schedTimer) { clearInterval(schedTimer); schedTimer = null; }
+    }
+
+    function toggleMute() {
+      muted = !muted;
+      localStorage.setItem("pacman_muted", muted ? "1" : "0");
+      if (master) master.gain.value = muted ? 0 : 0.6;
+      return muted;
+    }
+    function isMuted() { return muted; }
+
+    return { unlock, sfx, startMusic, stopMusic, toggleMute, isMuted };
+  })();
+
   // ---------- Contrôles ----------
   function setNext(d) { pac.next = d; }
 
@@ -368,10 +536,12 @@
     if (cell === ".") {
       grid[ty][tx] = " ";
       score += 10; dotsEaten++;
+      Audio.sfx.waka();
       checkWin();
     } else if (cell === "o") {
       grid[ty][tx] = " ";
       score += 50; dotsEaten++;
+      Audio.sfx.pellet();
       frightTimer = Math.max(0, 420 - (level - 1) * 40); // ~7s, diminue par niveau
       frightCombo = 0;
       for (const g of ghosts) {
@@ -493,6 +663,7 @@
           frightCombo++;
           const pts = 200 * Math.pow(2, frightCombo - 1); // 200,400,800,1600
           score += pts;
+          Audio.sfx.eatGhost();
           if (score > best) { best = score; localStorage.setItem("pacman_best", String(best)); }
         } else {
           // Pac-Man perd une vie
@@ -507,6 +678,8 @@
     lives--;
     deathTimer = 60; // frames d'animation
     running = false;
+    Audio.stopMusic();
+    Audio.sfx.death();
     updateHUD();
   }
 
@@ -531,6 +704,8 @@
       resetPositions();
       running = false;
       readyTimer = 60;
+      Audio.stopMusic();
+      Audio.sfx.level();
       msgEl.textContent = "NIVEAU " + level;
       showOverlayBrief("NIVEAU " + level + " !", 1200);
     }
@@ -722,6 +897,7 @@
           } else {
             resetPositions();
             running = true;
+            Audio.startMusic();
           }
         }
       }
@@ -758,6 +934,8 @@
   function startGame() {
     overlay.classList.add("hidden");
     msgEl.textContent = "";
+    Audio.unlock();      // débloque l'audio iOS (geste utilisateur)
+    Audio.sfx.start();
     // Nouvelle partie propre (le game over a déjà appelé fullReset, mais on garantit l'état)
     score = 0; lives = 3; level = 1; dotsEaten = 0; modeTimer = 0;
     buildGrid();
@@ -766,6 +944,7 @@
     readyTimer = 45;
     running = true;
     paused = false;
+    Audio.startMusic();
   }
 
   function fullReset() {
@@ -777,6 +956,7 @@
 
   function gameOver() {
     running = false;
+    Audio.stopMusic();
     overlay.classList.remove("hidden");
     msgEl.textContent = "GAME OVER — Score : " + score;
     startBtn.textContent = "REJOUER";
@@ -785,16 +965,36 @@
   }
 
   startBtn.addEventListener("click", () => {
+    Audio.unlock();
     if (msgEl.textContent.indexOf("NIVEAU") === 0) {
       // reprise de niveau
       overlay.classList.add("hidden");
       readyTimer = 45;
       running = true;
       msgEl.textContent = "";
+      Audio.startMusic();
       return;
     }
     startGame();
   });
+
+  // Débloque l'audio iOS dès le premier contact, par sécurité
+  document.addEventListener("touchstart", () => Audio.unlock(), { once: true, passive: true });
+  document.addEventListener("pointerdown", () => Audio.unlock(), { once: true });
+
+  // Bouton muet
+  const muteBtn = document.getElementById("muteBtn");
+  function refreshMuteBtn() {
+    const m = Audio.isMuted();
+    muteBtn.textContent = m ? "🔇" : "🔊";
+    muteBtn.classList.toggle("off", m);
+  }
+  muteBtn.addEventListener("click", () => {
+    Audio.unlock();
+    Audio.toggleMute();
+    refreshMuteBtn();
+  });
+  refreshMuteBtn();
 
   // ---------- Init ----------
   buildGrid();

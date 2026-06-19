@@ -90,6 +90,13 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Post-traitement (effet de halo lumineux "bloom"). Optionnel : le jeu fonctionne sans. -->
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script>
 (function(){
 "use strict";
@@ -115,6 +122,9 @@ let powerPellets = [];             // super-pastilles (meshes individuels)
 let ghosts = [];
 let playerSpawn, ghostHome;
 let running = false, paused = true;
+let composer, renderPass, bloomPass, useBloom=false;   // post-traitement
+let envTex, texWall, texFloor, texCeil;                 // textures procédurales
+let accentLight;
 
 // Affiche les erreurs à l'écran (impossible d'ouvrir la console sur iPhone)
 window.addEventListener('error', ev=>{
@@ -183,43 +193,128 @@ function buildMaze(cols, rows){
 }
 
 // =================================================================
+//  Textures procédurales (style néon / Tron) — aucune ressource externe
+// =================================================================
+function cnv(size){ const c=document.createElement('canvas'); c.width=c.height=size; return c; }
+
+// Mur : base sombre + lignes néon (renvoie {map, glow})
+function makeWallTextures(){
+  const S=256;
+  const base=cnv(S), glow=cnv(S);
+  const b=base.getContext('2d'), gl=glow.getContext('2d');
+  // fond
+  const grd=b.createLinearGradient(0,0,0,S);
+  grd.addColorStop(0,'#0a1138'); grd.addColorStop(1,'#050720');
+  b.fillStyle=grd; b.fillRect(0,0,S,S);
+  gl.fillStyle='#000'; gl.fillRect(0,0,S,S);
+  // grille / circuit
+  function line(ctx,x1,y1,x2,y2,w,col){ ctx.strokeStyle=col; ctx.lineWidth=w; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+  const neon='#37e8ff';
+  // bordure lumineuse
+  for(const ctx of [b,gl]){ line(ctx,8,8,S-8,8,6,neon); line(ctx,8,S-8,S-8,S-8,6,neon);
+    line(ctx,8,8,8,S-8,6,neon); line(ctx,S-8,8,S-8,S-8,6,neon); }
+  // motifs internes
+  for(let i=0;i<5;i++){
+    const y=40+i*44;
+    for(const ctx of [b,gl]){ line(ctx,24,y,S-24,y,3,'#1f6bd8'); }
+  }
+  for(const ctx of [b,gl]){
+    line(ctx,S/2,24,S/2,S-24,3,'#1f6bd8');
+    for(let i=0;i<4;i++){ ctx.fillStyle=neon; ctx.fillRect(S/2-6+ (i%2?40:-40), 60+i*40, 12,12); }
+  }
+  const map=new THREE.CanvasTexture(base), gmap=new THREE.CanvasTexture(glow);
+  map.encoding=THREE.sRGBEncoding; gmap.encoding=THREE.sRGBEncoding;
+  return { map, glow:gmap };
+}
+
+// Sol : sombre réfléchissant avec grille
+function makeFloorTexture(){
+  const S=256, c=cnv(S), x=c.getContext('2d');
+  x.fillStyle='#070a1e'; x.fillRect(0,0,S,S);
+  x.strokeStyle='rgba(60,120,255,0.35)'; x.lineWidth=2;
+  for(let i=0;i<=4;i++){ const p=i*S/4;
+    x.beginPath(); x.moveTo(p,0); x.lineTo(p,S); x.stroke();
+    x.beginPath(); x.moveTo(0,p); x.lineTo(S,p); x.stroke(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.encoding=THREE.sRGBEncoding; return t;
+}
+
+// Plafond : noir étoilé
+function makeCeilTexture(){
+  const S=256, c=cnv(S), x=c.getContext('2d');
+  x.fillStyle='#02030a'; x.fillRect(0,0,S,S);
+  for(let i=0;i<70;i++){ const r=Math.random()*1.4+0.3;
+    x.fillStyle='rgba(160,190,255,'+(Math.random()*0.7+0.3)+')';
+    x.beginPath(); x.arc(Math.random()*S,Math.random()*S,r,0,7); x.fill(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.encoding=THREE.sRGBEncoding; return t;
+}
+
+// Environnement (reflets) : dégradé équirectangulaire -> PMREM
+function makeEnvironment(){
+  const c=document.createElement('canvas'); c.width=512; c.height=256;
+  const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,256);
+  g.addColorStop(0,'#0a1430'); g.addColorStop(0.5,'#0c2a5a'); g.addColorStop(0.52,'#1a3a7a');
+  g.addColorStop(0.55,'#08122e'); g.addColorStop(1,'#02030a');
+  x.fillStyle=g; x.fillRect(0,0,512,256);
+  const eq=new THREE.CanvasTexture(c); eq.mapping=THREE.EquirectangularReflectionMapping;
+  const pmrem=new THREE.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
+  const env=pmrem.fromEquirectangular(eq).texture;
+  eq.dispose(); pmrem.dispose();
+  return env;
+}
+
+// =================================================================
 //  Construction de la scène 3D
 // =================================================================
 function buildScene(){
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05060f);
-  scene.fog = new THREE.Fog(0x05060f, CELL*2.5, CELL*11);
+  scene.background = new THREE.Color(0x03040c);
+  scene.fog = new THREE.FogExp2(0x05081c, 0.018);
+  scene.environment = envTex || null;
 
-  camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 400);
+  camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.1, 400);
 
-  // Lumières
-  scene.add(new THREE.HemisphereLight(0x6677ff, 0x080510, 0.45));
-  scene.add(new THREE.AmbientLight(0x404060, 0.5));
+  // Lumières — discrètes, l'ambiance vient surtout des matériaux émissifs + bloom
+  scene.add(new THREE.HemisphereLight(0x4a6cff, 0x05030f, 0.55));
+  scene.add(new THREE.AmbientLight(0x223055, 0.5));
   // "lampe torche" attachée à la caméra
-  const torch = new THREE.PointLight(0xfff0cc, 0.9, CELL*9, 1.5);
+  const torch = new THREE.PointLight(0xffe8c0, 1.1, CELL*10, 1.8);
   camera.add(torch);
   scene.add(camera);
-
+  // lumière d'accent qui change lentement de couleur (vie de la scène)
   const W = (GW-1)*CELL, D = (GH-1)*CELL;
+  accentLight = new THREE.PointLight(0xff3060, 1.4, CELL*14, 2);
+  accentLight.position.set(W/2, WALL_H*0.8, D/2);
+  scene.add(accentLight);
 
-  // Sol
-  const floorMat = new THREE.MeshStandardMaterial({ color:0x10122b, roughness:.95, metalness:0 });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W+CELL, D+CELL), floorMat);
-  floor.rotation.x = -Math.PI/2;
-  floor.position.set(W/2, 0, D/2);
+  if(!texWall){ const wt=makeWallTextures(); texWall=wt; texFloor=makeFloorTexture(); texCeil=makeCeilTexture(); }
+
+  // Sol réfléchissant
+  const ft = texFloor.clone(); ft.needsUpdate=true; ft.repeat.set((GW)/1,(GH)/1);
+  ft.wrapS=ft.wrapT=THREE.RepeatWrapping; ft.encoding=THREE.sRGBEncoding;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W+CELL, D+CELL),
+    new THREE.MeshStandardMaterial({ map:ft, color:0x223, roughness:0.25, metalness:0.85,
+      envMap:envTex||null, envMapIntensity:0.9 }));
+  floor.rotation.x = -Math.PI/2; floor.position.set(W/2, 0, D/2);
   scene.add(floor);
-  // Plafond
+
+  // Plafond étoilé
+  const ct = texCeil.clone(); ct.needsUpdate=true; ct.repeat.set(GW/2,GH/2); ct.wrapS=ct.wrapT=THREE.RepeatWrapping;
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W+CELL, D+CELL),
-      new THREE.MeshStandardMaterial({ color:0x070818, roughness:1 }));
+      new THREE.MeshStandardMaterial({ map:ct, emissiveMap:ct, emissive:0x6688ff, emissiveIntensity:0.6, roughness:1 }));
   ceil.rotation.x = Math.PI/2; ceil.position.set(W/2, WALL_H, D/2);
   scene.add(ceil);
 
-  // Murs (InstancedMesh pour la perf)
+  // Murs néon (InstancedMesh)
   let wallCount=0;
   for(let r=0;r<GH;r++) for(let c=0;c<GW;c++) if(grid[r][c]===1) wallCount++;
   const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
-  const wallMat = new THREE.MeshStandardMaterial({ color:0x1b2bd0, roughness:.45, metalness:.25,
-    emissive:0x0a1060, emissiveIntensity:.6 });
+  const wallMat = new THREE.MeshStandardMaterial({ map:texWall.map, emissiveMap:texWall.glow,
+    emissive:0x59f0ff, emissiveIntensity:1.6, roughness:0.35, metalness:0.6,
+    envMap:envTex||null, envMapIntensity:1.0 });
   const walls = new THREE.InstancedMesh(wallGeo, wallMat, wallCount);
   const m = new THREE.Matrix4(); let wi=0;
   for(let r=0;r<GH;r++) for(let c=0;c<GW;c++){
@@ -230,6 +325,9 @@ function buildScene(){
   }
   walls.instanceMatrix.needsUpdate = true;
   scene.add(walls);
+
+  // met à jour le post-traitement pour la nouvelle scène/caméra
+  if(renderPass){ renderPass.scene = scene; renderPass.camera = camera; }
 
   buildPellets();
   buildGhosts();
@@ -262,8 +360,9 @@ function buildPellets(){
 
   // Pastilles normales en InstancedMesh
   const normals = open.filter(([r,c])=>!powerSet.has(r+'_'+c));
-  const geo = new THREE.SphereGeometry(0.28, 8, 8);
-  const mat = new THREE.MeshStandardMaterial({ color:0xffe070, emissive:0xffc020, emissiveIntensity:.8, roughness:.4 });
+  const geo = new THREE.SphereGeometry(0.32, 12, 12);
+  const mat = new THREE.MeshStandardMaterial({ color:0xfff0a0, emissive:0xffc020,
+    emissiveIntensity:2.2, roughness:.3, metalness:.2 });
   pelletMesh = new THREE.InstancedMesh(geo, mat, normals.length);
   const m = new THREE.Matrix4();
   normals.forEach(([r,c],i)=>{
@@ -275,14 +374,19 @@ function buildPellets(){
   scene.add(pelletMesh);
   pelletsLeft += pellets.length;
 
-  // Super-pastilles : meshes individuels animés
-  const pmat = new THREE.MeshStandardMaterial({ color:0xff90ff, emissive:0xff40ff, emissiveIntensity:1.1, roughness:.3 });
+  // Super-pastilles : meshes individuels animés + halo lumineux local
+  const pmat = new THREE.MeshStandardMaterial({ color:0xffb0ff, emissive:0xff40ff,
+    emissiveIntensity:2.6, roughness:.2, metalness:.3 });
   powerSet.forEach(key=>{
     const [r,c]=key.split('_').map(Number);
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16), pmat.clone());
-    mesh.position.set(c*CELL, 1.3, r*CELL);
-    scene.add(mesh);
-    powerPellets.push({ x:c*CELL, z:r*CELL, mesh, alive:true });
+    const grp = new THREE.Group();
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.62,20,20), pmat.clone());
+    grp.add(mesh);
+    const light = new THREE.PointLight(0xff66ff, 1.2, CELL*3.2, 2);
+    grp.add(light);
+    grp.position.set(c*CELL, 1.4, r*CELL);
+    scene.add(grp);
+    powerPellets.push({ x:c*CELL, z:r*CELL, mesh:grp, alive:true });
   });
   pelletsLeft += powerPellets.length;
 }
@@ -291,22 +395,41 @@ function buildPellets(){
 const GHOST_COLORS = [0xff0000, 0xff9cce, 0x00ffff, 0xffb852];
 function makeGhostMesh(color){
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.SphereGeometry(1.2,20,16),
-    new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:.45, roughness:.5, transparent:true, opacity:.95 }));
-  body.position.y = 1.4; g.add(body);
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.2,1.4,20),
-    body.material.clone());
-  skirt.position.y = 0.7; g.add(skirt);
-  // yeux
-  const eyeW = new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0x222222 });
-  const eyeB = new THREE.MeshStandardMaterial({ color:0x1020ff });
-  for(const sx of [-0.45,0.45]){
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.32,12,12), eyeW);
-    e.position.set(sx,1.7,0.95); g.add(e);
-    const p = new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10), eyeB);
-    p.position.set(sx,1.7,1.2); g.add(p);
+  const mat = new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:0.9,
+    roughness:0.35, metalness:0.1, transparent:true, opacity:0.96 });
+  const parts = [];
+  // tête (dôme)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.2,24,18,0,Math.PI*2,0,Math.PI*0.62), mat);
+  head.position.y = 1.5; g.add(head); parts.push(head);
+  // corps
+  const bodyMat = mat.clone();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.2,1.5,24,1,true), bodyMat);
+  body.position.y = 0.95; g.add(body); parts.push(body);
+  // bas ondulé : rangée de petites sphères (les "pieds" classiques)
+  const bumpMat = mat.clone();
+  const NB=7;
+  for(let i=0;i<NB;i++){
+    const a = (i/(NB))*Math.PI*2;
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.34,12,12), bumpMat);
+    b.position.set(Math.cos(a)*0.95, 0.2, Math.sin(a)*0.95);
+    g.add(b); parts.push(b);
   }
-  g.userData.body = [body, skirt];
+  // halo interne pour faire ressortir au bloom
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(1.25,16,12),
+    new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.12 }));
+  halo.position.y = 1.1; g.add(halo); parts.push(halo);
+  // yeux
+  const eyeW = new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xaaaacc, emissiveIntensity:0.4 });
+  const eyeB = new THREE.MeshStandardMaterial({ color:0x1530ff, emissive:0x0a1090, emissiveIntensity:0.6 });
+  const eyes=[];
+  for(const sx of [-0.45,0.45]){
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.34,14,14), eyeW);
+    e.position.set(sx,1.7,0.85); g.add(e);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.17,12,12), eyeB);
+    p.position.set(sx,1.68,1.12); g.add(p); eyes.push(p);
+  }
+  g.userData.body = parts;     // parties qui changent de couleur
+  g.userData.eyes = eyes;
   return g;
 }
 function buildGhosts(){
@@ -319,7 +442,7 @@ function buildGhosts(){
     scene.add(mesh);
     const d=[[1,0],[-1,0],[0,1],[0,-1]][i%4];
     ghosts.push({ mesh, x:c*CELL, z:r*CELL, tc:c, tr:r, color:GHOST_COLORS[i%4],
-      dir:d, frightened:false, eaten:false });
+      dir:d, frightened:false, eaten:false, phase:Math.random()*6.28 });
   }
 }
 
@@ -410,7 +533,8 @@ function updateGhosts(dt){
         g.x += ddx/remain*budget; g.z += ddz/remain*budget; budget=0;
       }
     }
-    g.mesh.position.set(g.x, 0, g.z);
+    const bob = Math.sin(performance.now()*0.005 + g.phase)*0.14;
+    g.mesh.position.set(g.x, 0.15 + bob, g.z);
     g.mesh.rotation.y = Math.atan2(g.dir[0], g.dir[1]);
 
     // fantôme mangé : retour à la maison
@@ -471,8 +595,8 @@ function applyGhostVisual(g){
   else { col=g.color; emi=g.color; op=0.95; }
   for(const part of g.mesh.userData.body){
     part.material.color.setHex(col);
-    part.material.emissive.setHex(emi);
-    part.material.opacity = op;
+    if(part.material.emissive) part.material.emissive.setHex(emi);  // le halo (MeshBasic) n'en a pas
+    part.material.opacity = part.material.transparent ? (part.material.opacity<0.2?part.material.opacity:op) : op;
   }
 }
 function activateFright(){
@@ -566,7 +690,7 @@ const cv = $('game');
 cv.addEventListener('click', ()=>{ if(running && !IS_TOUCH) cv.requestPointerLock(); });
 addEventListener('mousemove', e=>{
   if(document.pointerLockElement===cv){
-    player.yaw   += e.movementX*0.0024;
+    player.yaw   -= e.movementX*0.0024;   // droite = regarder à droite
     player.pitch -= e.movementY*0.0024;
     player.pitch = Math.max(-1.2, Math.min(1.2, player.pitch));
   }
@@ -597,7 +721,7 @@ const look = { id:null, x:0, y:0 };
 const lookpad = $('lookpad');
 lookpad.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; look.id=t.identifier; look.x=t.clientX; look.y=t.clientY; },{passive:false});
 lookpad.addEventListener('touchmove',e=>{ e.preventDefault(); for(const t of e.changedTouches){ if(t.identifier===look.id){
-  player.yaw += (t.clientX-look.x)*0.006;
+  player.yaw -= (t.clientX-look.x)*0.006;   // glisser à droite = regarder à droite
   player.pitch -= (t.clientY-look.y)*0.006;
   player.pitch = Math.max(-1.2,Math.min(1.2,player.pitch));
   look.x=t.clientX; look.y=t.clientY; }}},{passive:false});
@@ -670,7 +794,11 @@ function loop(){
   requestAnimationFrame(loop);
   const dt = Math.min(0.05, clock.getDelta());
   if(running && !paused){ update(dt); }
-  renderer.render(scene, camera);
+  // lumière d'accent qui pulse/varie de couleur
+  if(accentLight){ const t=performance.now()*0.0004;
+    accentLight.color.setHSL((t%1), 0.8, 0.55);
+    accentLight.intensity = 1.1 + Math.sin(t*8)*0.4; }
+  if(useBloom && composer) composer.render(); else renderer.render(scene, camera);
 }
 
 function resize(){
@@ -679,9 +807,11 @@ function resize(){
   const w = Math.round(vv ? vv.width : innerWidth);
   const h = Math.round(vv ? vv.height : innerHeight);
   // limite la résolution (les iPhone ont un devicePixelRatio de 3) pour la fluidité
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const pr = Math.min(devicePixelRatio, 2);
+  renderer.setPixelRatio(pr);
   renderer.setSize(w, h, true);
   if(camera){ camera.aspect = w/h; camera.updateProjectionMatrix(); }
+  if(composer){ if(composer.setPixelRatio) composer.setPixelRatio(pr); composer.setSize(w, h); }
 }
 
 // Affiche un message d'erreur plein écran (ex : Three.js non chargé / WebGL absent)
@@ -737,12 +867,32 @@ function init(){
     showFatal('WebGL n\'est pas disponible sur ce navigateur.');
     return;
   }
+  // gestion des couleurs : rendu plus riche et réaliste
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
   clock = new THREE.Clock();
   minimap = $('minimap'); mmCtx = minimap.getContext('2d');
 
+  // environnement pour les reflets (nécessite le renderer)
+  try{ envTex = makeEnvironment(); }catch(e){ envTex=null; }
+
   // scène vide pour le rendu avant de jouer
-  scene = new THREE.Scene(); scene.background=new THREE.Color(0x05060f);
-  camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 400);
+  scene = new THREE.Scene(); scene.background=new THREE.Color(0x03040c);
+  camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.1, 400);
+
+  // post-traitement bloom (optionnel : si les scripts ont chargé)
+  if(THREE.EffectComposer && THREE.RenderPass && THREE.UnrealBloomPass){
+    try{
+      composer = new THREE.EffectComposer(renderer);
+      renderPass = new THREE.RenderPass(scene, camera);
+      composer.addPass(renderPass);
+      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight),
+        IS_TOUCH?0.85:1.1, 0.7, 0.18);   // (résolution, force, rayon, seuil)
+      composer.addPass(bloomPass);
+      useBloom = true;
+    }catch(e){ useBloom=false; }
+  }
   resize();
   loop();
 }

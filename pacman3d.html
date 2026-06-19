@@ -674,34 +674,61 @@ function resize(){
   if(camera){ camera.aspect = w/h; camera.updateProjectionMatrix(); }
 }
 
-function init(){
-  renderer = new THREE.WebGLRenderer({ canvas:$('game'), antialias:!IS_TOUCH, powerPreference:'high-performance' });
-  clock = new THREE.Clock();
-  minimap = $('minimap'); mmCtx = minimap.getContext('2d');
+// Affiche un message d'erreur plein écran (ex : Three.js non chargé / WebGL absent)
+function showFatal(msg){
+  const s=$('startScreen'); s.classList.remove('hidden');
+  s.innerHTML = '<h1>Oups…</h1><p>'+msg+'</p>';
+}
 
+// Liaison robuste sur iOS : on réagit au toucher ET au clic (avec anti-doublon)
+function bindTap(el, fn){
+  let lock=false;
+  el.addEventListener('touchend', e=>{ e.preventDefault(); e.stopPropagation();
+    if(lock) return; lock=true; setTimeout(()=>lock=false,600); fn(); }, {passive:false});
+  el.addEventListener('click', ()=>{ if(lock) return; lock=true; setTimeout(()=>lock=false,600); fn(); });
+}
+
+function start(){
+  if(!renderer) return;
+  unlockAudio();                 // débloque le son dans le geste utilisateur (obligatoire sur iOS)
+  $('startScreen').classList.add('hidden');
+  $('endScreen').classList.add('hidden');
+  newGame();
+  if(!IS_TOUCH) cv.requestPointerLock();
+}
+
+function init(){
+  // 1) On branche l'UI EN PREMIER : le bouton reste utilisable même si le rendu échoue
   if(IS_TOUCH) document.body.classList.add('touch');
+  bindTap($('startBtn'), start);
+  bindTap($('againBtn'), start);
 
   addEventListener('resize', resize);
   addEventListener('orientationchange', ()=> setTimeout(resize, 250));
   if(window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 
-  // iOS : empêche le zoom pincé et le double-tap qui casseraient la vue
+  // iOS : empêche le zoom pincé et le double-tap qui casseraient la vue (seulement en jeu)
   ['gesturestart','gesturechange','gestureend'].forEach(ev=>
     document.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
   let lastTouch=0;
   document.addEventListener('touchend', e=>{
+    if(!running) return;           // ne jamais bloquer les boutons des menus
     const now=Date.now(); if(now-lastTouch<350) e.preventDefault(); lastTouch=now;
   }, {passive:false});
 
-  function start(){
-    unlockAudio();                 // débloque le son dans le geste utilisateur (obligatoire sur iOS)
-    $('startScreen').classList.add('hidden');
-    $('endScreen').classList.add('hidden');
-    newGame();
-    if(!IS_TOUCH) cv.requestPointerLock();
+  // 2) Initialisation du rendu (protégée)
+  if(typeof THREE==='undefined'){
+    showFatal('La librairie 3D (Three.js) n\'a pas pu être chargée. Vérifiez votre connexion internet puis rechargez la page.');
+    return;
   }
-  $('startBtn').addEventListener('click', start);
-  $('againBtn').addEventListener('click', start);
+  try{
+    renderer = new THREE.WebGLRenderer({ canvas:$('game'), antialias:!IS_TOUCH, powerPreference:'high-performance' });
+  }catch(err){
+    showFatal('WebGL n\'est pas disponible sur ce navigateur.');
+    return;
+  }
+  clock = new THREE.Clock();
+  minimap = $('minimap'); mmCtx = minimap.getContext('2d');
 
   // scène vide pour le rendu avant de jouer
   scene = new THREE.Scene(); scene.background=new THREE.Color(0x05060f);

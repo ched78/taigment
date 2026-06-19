@@ -116,6 +116,16 @@ let ghosts = [];
 let playerSpawn, ghostHome;
 let running = false, paused = true;
 
+// Affiche les erreurs à l'écran (impossible d'ouvrir la console sur iPhone)
+window.addEventListener('error', ev=>{
+  let bar=document.getElementById('errbar');
+  if(!bar){ bar=document.createElement('div'); bar.id='errbar';
+    bar.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99;background:#a00;color:#fff;'+
+      'font:12px monospace;padding:8px;white-space:pre-wrap;max-height:40%;overflow:auto';
+    document.body.appendChild(bar); }
+  bar.textContent += '⚠ '+(ev.message||ev.error)+(ev.filename?(' @'+ev.filename.split('/').pop()+':'+ev.lineno):'')+'\n';
+});
+
 // iPhone / iPad / Android : détection tactile robuste (iPadOS se fait parfois passer pour un Mac)
 const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints||0) > 0;
 

@@ -3,3 +3,4 @@ Pipeline/build/
 *.blend1
 __pycache__/
 *.pyc
+Previews/**/_tmp/

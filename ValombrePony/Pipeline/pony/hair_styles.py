@@ -713,7 +713,7 @@ def tail_natural(surf, J, crest, seed=29, part_id="tail_natural"):
         dict(tag=2, n=72, a=(0.0, 0.85), phi=158, rfac=1.0, off=lambda s: 0.010 + 0.008 * s, width=(0.030, 0.042),
              nacross=2, variants=["clumped", "wispy", "split", "pointed", "clumped"], dz=0.05),
         # mèches folles clairsemées en surface : adoucissent la silhouette (cartes étroites, texture « wispy »)
-        dict(tag=3, n=36, a=(0.0, 0.8), phi=160, rfac=1.10, off=lambda s: 0.014 + 0.010 * s, width=(0.016, 0.024),
+        dict(tag=3, n=36, a=(0.25, 0.85), phi=160, rfac=1.05, off=lambda s: 0.012 + 0.008 * s, width=(0.016, 0.024),
              nacross=2, variants=["wispy", "pointed"], dz=0.07),
     ]
     for lay in layers:
@@ -748,7 +748,7 @@ def _tail_cards(surf, J, b, rng, lay, z_end0, z_dock_end, rprof, a_pow=1.0):
                      twist=twist)
 
 
-def _tail_weights(surf, J, A, s_fade=(0.0, 0.30), skin_tags=()):
+def _tail_weights(surf, J, A, s_fade=(0.05, 0.35), skin_tags=()):
     """Poids de queue (≤ 4 influences) :
     - couches plaquées sur le tronçon (`skin_tags` : enveloppe et natte de la queue tressée) : poids de peau du corps
       transférés au plus proche point de chaque sommet ;
@@ -765,8 +765,12 @@ def _tail_weights(surf, J, A, s_fade=(0.0, 0.30), skin_tags=()):
     ssum = Wrt.sum(1, keepdims=True)
     fallback = chain_weights(roots_u, J, TAIL_CHAIN[:4])
     Wrt = np.where(ssum > 0.2, Wrt / np.maximum(ssum, 1e-9), fallback)
+    # racine : poids de peau complets (racine collée à la peau) ; la part hors queue (hips…) s'efface
+    # progressivement sur les premiers 20 % de la mèche (étirement réparti sur plusieurs segments)
+    k = smoothstep(0.0, 0.20, A["S"])
+    Wroot = mix_weights(Wr[inv], Wrt[inv], k)
     beta = 1.0 - smoothstep(s_fade[0], s_fade[1], A["S"])
-    W = mix_weights(Wc, Wrt[inv], beta)
+    W = mix_weights(Wc, Wroot, beta)
     m = np.isin(A["TAG"], list(skin_tags))
     if m.any():
         W[m] = skin_weights_per_vertex(surf, J, V[m], TAIL_CHAIN[:4])

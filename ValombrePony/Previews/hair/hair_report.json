@@ -38,7 +38,7 @@
      "scapula_r",
      "spine_02"
     ],
-    "seconds": 1.3
+    "seconds": 1.32
    },
    "mane_braided": {
     "vertices": 1418,
@@ -71,7 +71,7 @@
      "scapula_l",
      "scapula_r"
     ],
-    "seconds": 0.36
+    "seconds": 0.34
    },
    "mane_roached": {
     "vertices": 1536,
@@ -105,7 +105,7 @@
      "scapula_l",
      "scapula_r"
     ],
-    "seconds": 0.33
+    "seconds": 0.28
    },
    "forelock_natural": {
     "vertices": 902,
@@ -133,7 +133,7 @@
      "jaw",
      "neck_06"
     ],
-    "seconds": 0.23
+    "seconds": 0.24
    },
    "forelock_braided": {
     "vertices": 231,
@@ -160,11 +160,11 @@
      "head",
      "neck_06"
     ],
-    "seconds": 0.06
+    "seconds": 0.05
    },
    "tail_natural": {
-    "vertices": 3858,
-    "triangles": 3874,
+    "vertices": 5010,
+    "triangles": 4954,
     "budget": 6000,
     "uv_in_unit": true,
     "duplicate_vertices": 0,
@@ -173,9 +173,9 @@
     "vertices_inside": 0,
     "faces_inside": 0,
     "min_sd": 0.0029977990670235328,
-    "root_depth_mean": 0.0024877138229839734,
+    "root_depth_mean": 0.0024883123731629,
     "max_influences": 4,
-    "mean_influences": 1.7257646448937274,
+    "mean_influences": 2.1956087824351296,
     "sum_err": 2.220446049250313e-16,
     "unweighted": 0,
     "joints": [
@@ -193,7 +193,7 @@
      "thigh_l",
      "thigh_r"
     ],
-    "seconds": 1.67
+    "seconds": 2.13
    },
    "tail_braided": {
     "vertices": 3958,
@@ -208,8 +208,8 @@
     "min_sd": 0.0029198224135428123,
     "root_depth_mean": 0.0024717976806013075,
     "max_influences": 4,
-    "mean_influences": 1.6867104598281961,
-    "sum_err": 1.1102230246251565e-16,
+    "mean_influences": 2.0045477513895906,
+    "sum_err": 2.220446049250313e-16,
     "unweighted": 0,
     "joints": [
      "hips",
@@ -226,7 +226,7 @@
      "thigh_l",
      "thigh_r"
     ],
-    "seconds": 1.64
+    "seconds": 1.66
    },
    "feathers": {
     "vertices": 672,
@@ -254,7 +254,7 @@
      "hind_pastern_l",
      "hind_pastern_r"
     ],
-    "seconds": 0.19
+    "seconds": 0.17
    }
   }
  },
@@ -424,10 +424,10 @@
   },
   "tail_natural": {
    "ok": true,
-   "triangles": 3874,
-   "vertices": 3858,
+   "triangles": 4954,
+   "vertices": 5010,
    "max_influences": 4,
-   "weight_sum_err": 2.9802322387695312e-08,
+   "weight_sum_err": 4.0978193283081055e-08,
    "uv_range": [
     0.004000000189989805,
     0.9970703125
@@ -461,7 +461,7 @@
    "triangles": 4286,
    "vertices": 3958,
    "max_influences": 4,
-   "weight_sum_err": 2.9802322387695312e-08,
+   "weight_sum_err": 4.0978193283081055e-08,
    "uv_range": [
     0.0010000000474974513,
     0.9970703125
@@ -542,10 +542,10 @@
       "p01": 0.9999942478345899
      },
      "tail_natural": {
-      "max": 1.0000041596386466,
+      "max": 1.000005187215658,
       "min": 0.9999692192635864,
-      "p99": 1.000001499160491,
-      "p01": 0.999998152212853
+      "p99": 1.0000014239285175,
+      "p01": 0.9999980319626348
      },
      "feathers": {
       "max": 1.0000037973464033,
@@ -557,19 +557,27 @@
     "penetration": {
      "mane_natural": {
       "checked": 1143,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002500112730571772,
+      "root_sd_max": -0.002433235112891275
      },
      "forelock_natural": {
       "checked": 205,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0025000950939631783,
+      "root_sd_max": -0.002260500722045089
      },
      "tail_natural": {
-      "checked": 905,
-      "deeper_than_4mm": 0
+      "checked": 1175,
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002499838287016276,
+      "root_sd_max": -0.0024348227309390624
      },
      "feathers": {
       "checked": 140,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024996723542667354,
+      "root_sd_max": -0.002460623764586778
      }
     },
     "body_crest_stretch": {
@@ -593,10 +601,10 @@
       "p01": 0.931457981984338
      },
      "tail_natural": {
-      "max": 1.0000041596386466,
+      "max": 1.000005187215658,
       "min": 0.9999692192635864,
-      "p99": 1.000001499160491,
-      "p01": 0.999998152212853
+      "p99": 1.0000014239285175,
+      "p01": 0.9999980319626348
      },
      "feathers": {
       "max": 1.0000037973464033,
@@ -608,19 +616,27 @@
     "penetration": {
      "mane_natural": {
       "checked": 1143,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0025193564393300102,
+      "root_sd_max": -0.001897110560410517
      },
      "forelock_natural": {
       "checked": 205,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0025033575809038713,
+      "root_sd_max": -0.00203293118743178
      },
      "tail_natural": {
-      "checked": 905,
-      "deeper_than_4mm": 0
+      "checked": 1175,
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002499838287016276,
+      "root_sd_max": -0.0024348227309390624
      },
      "feathers": {
       "checked": 140,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024996723542667354,
+      "root_sd_max": -0.002460623764586778
      }
     },
     "body_crest_stretch": {
@@ -644,10 +660,10 @@
       "p01": 0.9228988269703072
      },
      "tail_natural": {
-      "max": 1.0000041596386466,
+      "max": 1.000005187215658,
       "min": 0.9999692192635864,
-      "p99": 1.000001499160491,
-      "p01": 0.999998152212853
+      "p99": 1.0000014239285175,
+      "p01": 0.9999980319626348
      },
      "feathers": {
       "max": 1.0000037973464033,
@@ -659,19 +675,27 @@
     "penetration": {
      "mane_natural": {
       "checked": 1143,
-      "deeper_than_4mm": 1
+      "deeper_than_4mm": 1,
+      "root_sd_min": -0.0025067275546350465,
+      "root_sd_max": -0.002080425736553579
      },
      "forelock_natural": {
       "checked": 205,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002498663569263898,
+      "root_sd_max": -0.0022892675231198645
      },
      "tail_natural": {
-      "checked": 905,
-      "deeper_than_4mm": 0
+      "checked": 1175,
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002499838287016276,
+      "root_sd_max": -0.0024348227309390624
      },
      "feathers": {
       "checked": 140,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024996723542667354,
+      "root_sd_max": -0.002460623764586778
      }
     },
     "body_crest_stretch": {
@@ -695,10 +719,10 @@
       "p01": 0.9999942478345899
      },
      "tail_natural": {
-      "max": 1.6179680268294252,
-      "min": 0.6464132358003434,
-      "p99": 1.1389169997203765,
-      "p01": 0.827492158274459
+      "max": 1.4834670506935297,
+      "min": 0.6515184604801265,
+      "p99": 1.2472267648309645,
+      "p01": 0.8163830916202359
      },
      "feathers": {
       "max": 1.0000037973464033,
@@ -710,19 +734,27 @@
     "penetration": {
      "mane_natural": {
       "checked": 1143,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002500112730571772,
+      "root_sd_max": -0.002433235112891275
      },
      "forelock_natural": {
       "checked": 205,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0025000950939631783,
+      "root_sd_max": -0.002260500722045089
      },
      "tail_natural": {
-      "checked": 905,
-      "deeper_than_4mm": 0
+      "checked": 1175,
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.004266356257179416,
+      "root_sd_max": -0.0016651503575193516
      },
      "feathers": {
       "checked": 140,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024996723542667354,
+      "root_sd_max": -0.002460623764586778
      }
     },
     "body_crest_stretch": {
@@ -748,24 +780,30 @@
       "p01": 0.9999999754786308
      },
      "tail_braided": {
-      "max": 1.0000061598875924,
-      "min": 0.9999858326072625,
-      "p99": 1.000002188257838,
-      "p01": 0.9999965773349749
+      "max": 1.0000059374749821,
+      "min": 0.9999935252988357,
+      "p99": 1.0000018400984487,
+      "p01": 0.9999972817518502
      }
     },
     "penetration": {
      "mane_braided": {
       "checked": 237,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002499969899480331,
+      "root_sd_max": -0.0024956928646173715
      },
      "forelock_braided": {
       "checked": 38,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002499342634818263,
+      "root_sd_max": -0.0024971628801943035
      },
      "tail_braided": {
       "checked": 896,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024997762997762685,
+      "root_sd_max": -0.0022791922595419845
      }
     },
     "body_crest_stretch": {
@@ -789,24 +827,30 @@
       "p01": 0.9118245497976647
      },
      "tail_braided": {
-      "max": 1.0000061598875924,
-      "min": 0.9999858326072625,
-      "p99": 1.000002188257838,
-      "p01": 0.9999965773349749
+      "max": 1.0000059374749821,
+      "min": 0.9999935252988357,
+      "p99": 1.0000018400984487,
+      "p01": 0.9999972817518502
      }
     },
     "penetration": {
      "mane_braided": {
       "checked": 237,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024955285794743664,
+      "root_sd_max": -0.0019844096915494353
      },
      "forelock_braided": {
       "checked": 38,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002494845814686927,
+      "root_sd_max": -0.002487434010877476
      },
      "tail_braided": {
       "checked": 896,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024997762997762685,
+      "root_sd_max": -0.0022791922595419845
      }
     },
     "body_crest_stretch": {
@@ -830,24 +874,30 @@
       "p01": 0.893969652443588
      },
      "tail_braided": {
-      "max": 1.0000061598875924,
-      "min": 0.9999858326072625,
-      "p99": 1.000002188257838,
-      "p01": 0.9999965773349749
+      "max": 1.0000059374749821,
+      "min": 0.9999935252988357,
+      "p99": 1.0000018400984487,
+      "p01": 0.9999972817518502
      }
     },
     "penetration": {
      "mane_braided": {
       "checked": 237,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0025059932031283316,
+      "root_sd_max": -0.0023318499184263736
      },
      "forelock_braided": {
       "checked": 38,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024874685653028692,
+      "root_sd_max": -0.0024804130421905435
      },
      "tail_braided": {
       "checked": 896,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.0024997762997762685,
+      "root_sd_max": -0.0022791922595419845
      }
     },
     "body_crest_stretch": {
@@ -871,24 +921,30 @@
       "p01": 0.9999999754786308
      },
      "tail_braided": {
-      "max": 36.53635710286915,
-      "min": 0.488911924544261,
-      "p99": 1.0672783278029572,
-      "p01": 0.8117025815679549
+      "max": 1.2719886942252225,
+      "min": 0.6604229351267321,
+      "p99": 1.0623559079407805,
+      "p01": 0.8286287555680704
      }
     },
     "penetration": {
      "mane_braided": {
       "checked": 237,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002499969899480331,
+      "root_sd_max": -0.0024956928646173715
      },
      "forelock_braided": {
       "checked": 38,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002499342634818263,
+      "root_sd_max": -0.0024971628801943035
      },
      "tail_braided": {
       "checked": 896,
-      "deeper_than_4mm": 0
+      "deeper_than_4mm": 0,
+      "root_sd_min": -0.002554234264887434,
+      "root_sd_max": -0.0022792173748503175
      }
     },
     "body_crest_stretch": {

@@ -722,7 +722,9 @@ def build_low(sdf_closed, sdf_full, h_qf=0.007, target_faces=11000, log=print):
 
     C = face_centers(bm)
     bm.faces.ensure_lookup_table()
-    subdivide_faces(bm, [bm.faces[i] for i in np.flatnonzero(lvl1(C))])
+    sel1 = np.flatnonzero(lvl1(C))
+    log(f"[low] subdivision niveau 1 : {len(sel1)} faces")
+    subdivide_faces(bm, [bm.faces[i] for i in sel1])
     project_bm(bm, sdf_closed, iters=4)
 
     # --- niveau 2 : yeux, naseaux, lèvres, oreilles
@@ -745,7 +747,9 @@ def build_low(sdf_closed, sdf_full, h_qf=0.007, target_faces=11000, log=print):
 
     C = face_centers(bm)
     bm.faces.ensure_lookup_table()
-    subdivide_faces(bm, [bm.faces[i] for i in np.flatnonzero(lvl2(C))])
+    sel2 = np.flatnonzero(lvl2(C))
+    log(f"[low] subdivision niveau 2 : {len(sel2)} faces")
+    subdivide_faces(bm, [bm.faces[i] for i in sel2])
     project_bm(bm, sdf_closed, iters=4)
     bm.verts.index_update()
     tangential_relax(bm, sdf_closed, np.arange(len(bm.verts)), iters=2, lam=0.3)

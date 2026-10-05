@@ -58,7 +58,7 @@ HIND_BOUNDS = {
     "hip_flex": (-25 * D, 40 * D),    # hanche : + flexion ≤ 40°, − extension ≤ 25° (SPEC §3)
     "hip_abd": (-10 * D, 10 * D),     # ±10° (anatomy.md) [I]
     "hip_twist": (-15 * D, 15 * D),
-    "stifle": (-75 * D, 32 * D),      # grasset : − flexion ; + extension (pas de limite SPEC) [I]
+    "stifle": (-95 * D, 32 * D),      # grasset : − flexion ; + extension (pas de limite SPEC) [I]
     "hock_slack": (-8 * D, 8 * D),    # écart toléré au couplage jarret = −k·grasset (pénalisé)
     "fetlock": (-105 * D, 32 * D),
     "coffin": (-50 * D, 15 * D),
@@ -158,6 +158,21 @@ class LimbSolver:
             ang[4, 0] = v["coffin"]
         return ang
 
+    def vars_from_chain(self, chain_ang):
+        """Angles de chaîne (n,3) -> vecteur de variables (pour amorcer l'IK depuis une pose FK)."""
+        v = {}
+        if self.front:
+            v.update(scap=chain_ang[0, 0], sh_flex=chain_ang[1, 0], sh_abd=chain_ang[1, 2], sh_twist=chain_ang[1, 1],
+                     elbow=chain_ang[2, 0], fetlock=chain_ang[4, 0], pastern_twist=chain_ang[4, 1],
+                     pastern_lat=chain_ang[4, 2], coffin=chain_ang[5, 0])
+        else:
+            v.update(hip_flex=chain_ang[0, 0], hip_abd=chain_ang[0, 2], hip_twist=chain_ang[0, 1],
+                     stifle=chain_ang[1, 0], hock_slack=chain_ang[2, 0] + self.k_recip * chain_ang[1, 0],
+                     fetlock=chain_ang[3, 0], pastern_twist=chain_ang[3, 1], pastern_lat=chain_ang[3, 2],
+                     coffin=chain_ang[4, 0])
+        x = np.array([v.get(n, 0.0) for n in self.var_names])
+        return np.clip(x, self.lb + 1e-6, self.ub - 1e-6)
+
     def scap_flex_for(self, parent_world, toe_target, extra=0.0):
         """Rotation d'omoplate = k_scap × protraction de la cible (angle sagittal pince/sommet)."""
         if not self.front:
@@ -213,7 +228,9 @@ class LimbSolver:
             r.append(np.array([0.15 * (md - inp.mid_pref)]))
         if inp.w_ground > 0:
             # pénalité unilatérale : points de sole + articulation du boulet au-dessus du sol
-            zmin = np.concatenate([sole[1:, 2] if inp.ground_clear <= 0.0 else sole[:, 2], [Ms[-2][2, 3] - 0.02]])
+            # sole + articulations de la chaîne (rayon des segments ~3-4 cm) au-dessus du sol
+            joints_z = np.array([M[2, 3] for M in Ms[1:-1]]) - 0.035
+            zmin = np.concatenate([sole[1:, 2] if inp.ground_clear <= 0.0 else sole[:, 2], joints_z + inp.ground_clear])
             pen = np.minimum(0.0, zmin - inp.ground_clear)
             r.append(inp.w_ground * pen)
         return np.concatenate([np.atleast_1d(a) for a in r])

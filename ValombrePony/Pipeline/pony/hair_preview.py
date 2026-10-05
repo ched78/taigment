@@ -23,7 +23,7 @@ PREVIEW_DIR = cv.PREVIEW_DIR / "hair"
 SCRATCH = cv.BUILD_DIR / "hair_cache" / "preview"
 
 COAT = {"brown": (0.085, 0.036, 0.014), "flaxen": (0.20, 0.068, 0.022),     # bai / alezan, linéaire (aperçu) [A]
-        "black": (0.33, 0.31, 0.29)}                                          # gris (crins noirs)
+        "black": (0.17, 0.16, 0.15)}                                          # gris (crins noirs)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -293,9 +293,11 @@ def posed_penetration(objs, body, sample=4):
         ev.vertices.foreach_get("co", co)
         co = co.reshape(-1, 3)
         ob.evaluated_get(dg).to_mesh_clear()
+        roots = np.zeros((0, 3))
         if "hair_flag" in ob.data.attributes:      # racines et dessous encastrés exclus
             fl = np.empty(n, np.int32)
             ob.data.attributes["hair_flag"].data.foreach_get("value", fl)
+            roots = co[fl == 1]
             co = co[fl == 0]
         deep = 0
         for p in co[::sample]:
@@ -305,19 +307,55 @@ def posed_penetration(objs, body, sample=4):
             sd = (np.array(p) - np.array(loc)) @ np.array(nn)
             if sd < -0.004:
                 deep += 1
-        out[pid] = {"checked": len(co[::sample]), "deeper_than_4mm": deep}
+        # dérive des racines : distance signée à la peau posée (au repos : -2,5 mm)
+        rsd = []
+        for p in roots[::sample]:
+            loc, nn, fi, d = bvh.find_nearest(p.tolist())
+            if loc is not None:
+                rsd.append(float((np.array(p) - np.array(loc)) @ np.array(nn)))
+        rsd = np.array(rsd) if rsd else np.zeros(1)
+        out[pid] = {"checked": len(co[::sample]), "deeper_than_4mm": deep,
+                    "root_sd_min": float(rsd.min()), "root_sd_max": float(rsd.max())}
     return out
 
 
 # ----------------------------------------------------------------------------------------------
 # Planches
 # ----------------------------------------------------------------------------------------------
-def render_part_previews(part_ids, colors=("brown", "flaxen"), out_dir=PREVIEW_DIR, views=None, prefer_real=True,
-                         samples=24, resolution=(480, 480), companions=None, sheet=True, log=print, ext="png"):
-    """Rend chaque pièce seule sur le corps (vues profil gauche/droit, 3/4, arrière/face, gros plan) pour chaque
-    couleur, et assemble une planche par pièce `<out_dir>/<id>.png`. Renvoie {id: [chemins]}."""
-    from . import render
+def sheet(paths, out_path, cols=4, labels=None, title=None):
+    """Planche contact (PIL) avec étiquettes en police DejaVu (accents) si disponible."""
+    from PIL import Image, ImageDraw, ImageFont
 
+    ims = [Image.open(p).convert("RGB") for p in paths]
+    w, h = ims[0].size
+    rows = int(math.ceil(len(ims) / cols))
+    top = 34 if title else 0
+    out = Image.new("RGB", (cols * w, rows * h + top), (24, 24, 24))
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
+        tfont = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    except OSError:
+        font = tfont = ImageFont.load_default()
+    d = ImageDraw.Draw(out)
+    if title:
+        d.text((10, 6), title, fill=(235, 235, 235), font=tfont)
+    for i, im in enumerate(ims):
+        x, y = (i % cols) * w, (i // cols) * h + top
+        out.paste(im, (x, y))
+        if labels:
+            tw = d.textlength(labels[i], font=font)
+            d.rectangle([x, y, x + tw + 12, y + 22], fill=(0, 0, 0))
+            d.text((x + 6, y + 3), labels[i], fill=(255, 255, 255), font=font)
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out.save(out_path, quality=88) if out_path.suffix.lower() in (".jpg", ".jpeg") else out.save(out_path)
+    return out_path
+
+
+def render_part_previews(part_ids, colors=("brown", "flaxen"), out_dir=PREVIEW_DIR, views=None, prefer_real=True,
+                         samples=24, resolution=(480, 480), companions=None, make_sheet=True, log=print, ext="png"):
+    """Rend chaque pièce seule sur le corps (vues profil gauche/droit, 3/4, arrière/face, gros plan) pour chaque
+    couleur, et assemble une planche par pièce `<out_dir>/<id>.<ext>`. Renvoie ({id: [chemins]}, kind)."""
     arm, body, kind = setup_scene(prefer_real, samples, resolution)
     J = hs.joints_from_armature(arm)
     objs = load_parts(part_ids, arm)
@@ -335,9 +373,10 @@ def render_part_previews(part_ids, colors=("brown", "flaxen"), out_dir=PREVIEW_D
                 p = render_still(SCRATCH / "renders" / f"{pid}_{col}_{vn}.png")
                 paths.append(p)
                 labels.append(f"{pid} {col} {vn}")
-        if sheet and paths:
+        if make_sheet and paths:
             n_per = len(paths) // len(colors)
-            render.contact_sheet(paths, Path(out_dir) / f"{pid}.{ext}", cols=n_per, labels=labels)
+            sheet(paths, Path(out_dir) / f"{pid}.{ext}", cols=n_per, labels=labels,
+                  title=f"{pid} — corps {kind} — brun puis lavé")
         out[pid] = paths
         log(f"[hair] aperçus {pid} ({kind}) : {len(paths)} images")
     return out, kind
@@ -364,8 +403,6 @@ def pose_tests(out_path, sets=("natural", "braided"), prefer_real=True, samples=
     des crins ET de la peau du corps sous la crinière, et les sommets de crins enfoncés de plus de 4 mm dans le
     corps posé. Planche `out_path`. Renvoie le rapport chiffré."""
     import bpy
-
-    from . import render
 
     arm, body, kind = setup_scene(prefer_real, samples, resolution)
     J = hs.joints_from_armature(arm)
@@ -415,9 +452,12 @@ def pose_tests(out_path, sets=("natural", "braided"), prefer_real=True, samples=
             log(f"[hair] pose {sname}/{pose}: étirement crins max " +
                 ", ".join(f"{k}={v['max']:.2f}" for k, v in r["stretch"].items()) +
                 f" | peau crête p99={r['body_crest_stretch']['p99']:.2f} | >4 mm sous la peau : " +
-                ", ".join(f"{k}={v['deeper_than_4mm']}" for k, v in r["penetration"].items()))
+                ", ".join(f"{k}={v['deeper_than_4mm']}" for k, v in r["penetration"].items()) +
+                " | racines (mm) : " + ", ".join(f"{k}=[{v['root_sd_min'] * 1000:.1f},{v['root_sd_max'] * 1000:.1f}]"
+                                                 for k, v in r["penetration"].items()))
         apply_pose(arm, {})
-    render.contact_sheet(paths, out_path, cols=4, labels=labels)
+    sheet(paths, out_path, cols=4, labels=labels,
+          title=f"Tests de déformation (corps {kind}) : repos, brouter, tête levée, queue relevée")
     return rep
 
 
@@ -427,16 +467,17 @@ def _tris(me):
 
 
 def styles_board(out_path, prefer_real=True, samples=32, resolution=(420, 420), log=print):
-    """Planche finale : 3 styles (naturel brun, tressé lavé, rasé noir sur gris) × 4 vues."""
-    from . import render
-
+    """Planche finale : 3 styles (naturel brun, tressé lavé, rasé noir sur gris) × 4 vues, puis une rangée de
+    gros plans (crins lavés) et de poses (brouter, queue relevée)."""
     arm, body, kind = setup_scene(prefer_real, samples, resolution)
     J = hs.joints_from_armature(arm)
     all_ids = sorted({p for s in STYLE_SETS.values() for p in s[0]})
     objs = load_parts(all_ids, arm)
     head = tuple(np.array(J["head"][0]) + np.array([0, 0.12, -0.08]))
-    views = [("3/4 avant", -35, 12, (0, 0.15, 0.85), 3.7), ("profil droit", 180, 6, (0, 0.5, 1.1), 2.6),
+    views = [("3/4 avant", -35, 12, (0, 0.15, 0.85), 3.7), ("profil droit", 180, 6, (0, 0.45, 1.05), 2.9),
              ("3/4 arrière", 135, 14, (0, -0.45, 0.85), 3.2), ("tête", -125, 10, head, 1.05)]
+    names = {"natural": "naturel", "braided": "tressé", "roached": "rasé (brosse)"}
+    cols_fr = {"brown": "brun", "flaxen": "lavé", "black": "noir"}
     paths, labels = [], []
     for sname, (ids, col) in STYLE_SETS.items():
         _show_only(objs, ids)
@@ -445,7 +486,23 @@ def styles_board(out_path, prefer_real=True, samples=32, resolution=(420, 420), 
             camera(az, el, tg, dist)
             p = render_still(SCRATCH / "board" / f"{sname}_{vn.replace(' ', '_').replace('/', '-')}.png")
             paths.append(p)
-            labels.append(f"{sname} ({col}) - {vn}")
-    render.contact_sheet(paths, out_path, cols=4, labels=labels)
+            labels.append(f"{names[sname]} ({cols_fr[col]}) — {vn}")
+    # rangée de détails : gros plans en crins lavés et poses
+    ids = STYLE_SETS["natural"][0]
+    _show_only(objs, ids)
+    set_colors("flaxen")
+    details = [("crinière, gros plan", 200, 10, (0.03, 0.66, 1.33), 1.0, {}),
+               ("queue, gros plan", 120, 12, (0.0, -0.86, 0.85), 1.25, {}),
+               ("brouter", -50, 12, (0, 0.7, 0.7), 2.2, POSES["graze"]),
+               ("queue relevée", 50, 15, (0, -0.8, 0.95), 2.2, POSES["tail_up"])]
+    for vn, az, el, tg, dist, pose in details:
+        apply_pose(arm, pose)
+        camera(az, el, tg, dist)
+        p = render_still(SCRATCH / "board" / f"detail_{vn.replace(' ', '_').replace(',', '')}.png")
+        paths.append(p)
+        labels.append(f"naturel (lavé) — {vn}")
+    apply_pose(arm, {})
+    sheet(paths, out_path, cols=4, labels=labels,
+          title=f"ValombrePony — styles de crins (corps {'réel' if kind == 'real' else 'provisoire'})")
     log(f"[hair] planche {out_path} ({kind})")
     return out_path, kind

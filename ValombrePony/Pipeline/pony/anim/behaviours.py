@@ -384,15 +384,24 @@ def get_up():
            body=dict(STAND_BODY, pitch=3.0, y=0.03, z=-0.06)),
         _k(2.5, _neck(0, 0), {"head": 0, "hips": 0}, _tail(0, 0), body=dict(STAND_BODY)),
     ]
-    fk = [FKSpan("fl", 0.0, 0.15, blend_out=0.45), FKSpan("fr", 0.0, 0.30, blend_out=0.45),
-          FKSpan("hl", 0.0, 0.95, blend_out=0.50), FKSpan("hr", 0.0, 1.0, blend_out=0.50)]
-    plants = {"fl": (0.0, 0.32), "fr": (0.0, 0.26), "hl": (0.0, 0.05), "hr": (0.0, 0.03)}
-    steps = [Step("fl", 1.50, 1.95, to=(0.0, 0.0), lift=0.06, carpus=40, flip=25),
+    # les antérieurs quittent le pliage par un PAS (IK) qui part de la position FK du sabot ; idem postérieurs
+    # passage FK -> IK immédiat : le pas part de la pose FK exacte et l'IK est amorcée sur les angles FK
+    fk = [FKSpan("fl", 0.0, 0.18, blend_out=1e-3), FKSpan("fr", 0.0, 0.40, blend_out=1e-3),
+          FKSpan("hl", 0.0, 1.00, blend_out=1e-3), FKSpan("hr", 0.0, 1.05, blend_out=1e-3)]
+    plants = {"fl": (0.0, 0.0), "fr": (0.0, 0.0), "hl": (0.0, 0.0), "hr": (0.0, 0.0)}
+    steps = [Step("fl", 0.18, 0.60, to=(0.0, 0.32), lift=0.08, carpus=30, flip=10, from_fk=True),
+             Step("fr", 0.40, 0.80, to=(0.0, 0.26), lift=0.08, carpus=30, flip=10, from_fk=True),
+             Step("hl", 1.00, 1.40, to=(0.0, 0.05), lift=0.05, flip=10, from_fk=True),
+             Step("hr", 1.05, 1.45, to=(0.0, 0.03), lift=0.05, flip=10, from_fk=True),
+             Step("fl", 1.50, 1.95, to=(0.0, 0.0), lift=0.06, carpus=40, flip=25),
              Step("fr", 1.80, 2.25, to=(0.0, 0.0), lift=0.06, carpus=40, flip=25),
-             Step("hl", 1.60, 2.00, to=(0.0, 0.0), lift=0.04, flip=15)]
+             Step("hl", 1.70, 2.05, to=(0.0, 0.0), lift=0.04, flip=15)]
+    keys.append(_k(0.95, hind_fold("l", abd=-8.0), hind_fold("r", abd=9.0)))     # postérieurs repliés jusqu'à la poussée
     return Choreo(
         name="get_up", duration=dur, keys=keys, fk=fk, plants0=plants, steps=steps,
-        events=[(0.60, "foot_down_fl"), (0.75, "foot_down_fr"), (1.45, "foot_down_hl"), (1.50, "foot_down_hr")],
+        events=[(0.60, "foot_down_fl"), (0.80, "foot_down_fr"), (1.40, "foot_down_hl"), (1.45, "foot_down_hr"),
+                (1.50, "foot_up_fl"), (1.95, "foot_down_fl"), (1.70, "foot_up_hl"), (2.05, "foot_down_hl"),
+                (1.80, "foot_up_fr"), (2.25, "foot_down_fr")],
         notes="Se relever depuis `lying` : antérieurs dépliés et posés vers l'avant l'un après l'autre, élan de "
               "l'encolure, position « assise », puis poussée des postérieurs (gaits.md §4 [U]) ; finit debout carré "
               "après le réajustement des antérieurs et d'un postérieur. " + A_NOTE)

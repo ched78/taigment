@@ -46,6 +46,7 @@ class Step:
     pitch_end: float = 0.0      # inclinaison du sabot à la pose (° , + = talons levés)
     yaw_end: float = 0.0
     strike: bool = False        # contact glissant voulu (grattage) : pas d'appui « planté »
+    from_fk: bool = False       # le pas part de la position FK du sabot à t0 (sortie d'une plage FK)
 
 
 @dataclass
@@ -252,7 +253,7 @@ def _fk_weight(ch: Choreo, limb, times):
     return w
 
 
-def hoof_targets(sk: Skeleton, ch: Choreo, limb, times):
+def hoof_targets(sk: Skeleton, ch: Choreo, limb, times, fk_start=None):
     """Cibles de sole (pince, talon, mamelles) dans le repère du clip pour un membre + états."""
     F = len(times)
     rest = sk.rest_sole_world(limb)
@@ -278,13 +279,18 @@ def hoof_targets(sk: Skeleton, ch: Choreo, limb, times):
     seg_start = 0.0
     for st in steps:
         a = cur_w
+        fk_c = fk_f = None
+        if st.from_fk and fk_start is not None and (limb, st.t0) in fk_start:
+            a_toe, a_pitch, fk_c, fk_f = fk_start[(limb, st.t0)]
+            a = np.array([a_toe[0], a_toe[1] + v * st.t0, max(a_toe[2], 0.0)])
+            cur_pitch = a_pitch
         b = np.array([toe0[0] + st.to[0], toe0[1] + st.to[1] + v * st.t1, 0.0])
         m = (times >= st.t0) & (times <= st.t1)
         after = times > st.t1
         s = np.clip((times[m] - st.t0) / (st.t1 - st.t0), 0, 1)
         hz = mu.smoothstep(s)
         toe[m] = a + (b - a) * hz[:, None]
-        toe[m, 2] = st.lift * mu.bump(s, 0.45)
+        toe[m, 2] = a[2] * (1.0 - mu.smootherstep(s)) + st.lift * mu.bump(s, 0.45)
         p_a, p_b = cur_pitch, st.pitch_end * D
         pitch[m] = p_a + (p_b - p_a) * mu.smootherstep(s) + st.flip * D * mu.bump(s, 0.40)
         yaw[m] = cur_yaw + (st.yaw_end * D - cur_yaw) * mu.smootherstep(s)
@@ -294,6 +300,12 @@ def hoof_targets(sk: Skeleton, ch: Choreo, limb, times):
             carpus[m] = 2.0 * D - (st.carpus + 2.0) * D * mu.bump(s, 0.42)
         coffin[m] = -20 * D * mu.bump(s, 0.45)
         fet[m] = -30 * D * mu.bump(s, 0.4) * (st.lift / 0.07)
+        if fk_c is not None:
+            # sortie de pliage : carpe et boulet partent de leurs valeurs FK et se déplient pendant le pas
+            e = mu.smootherstep(np.clip(s / 0.85, 0, 1))
+            if limb.startswith("f"):
+                carpus[m] = fk_c * (1 - e) + 2.0 * D * e
+            fet[m] = fk_f * (1 - e)
         toe[after] = b
         pitch[after] = p_b
         yaw[after] = st.yaw_end * D
@@ -354,7 +366,22 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
     trans[:, bj] = tb
     fk_ang = ang.copy()
     w_ik = {l: _fk_weight(ch, l, times) for l in LIMBS}
-    targets = {l: hoof_targets(sk, ch, l, times) for l in LIMBS}
+    # départs de pas depuis la pose FK (sortie de plage FK) : position de pince et bascule du sabot en FK
+    fk_start = {}
+    if any(st.from_fk for st in ch.steps):
+        W0 = sk.fk(sk.basis_from_angles(fk_ang, trans))
+        for st in ch.steps:
+            if st.from_fk:
+                f0 = int(round(st.t0 * FPS))
+                sole = sk.sole_world(W0[f0:f0 + 1], st.limb)[0]
+                vth = sole[5] - sole[0]
+                pitch0 = np.arctan2(vth[2], -vth[1]) / D
+                pre = "front" if st.limb.startswith("f") else "hind"
+                sd = st.limb[1]
+                fc = fk_ang[f0, sk.idx(f"front_cannon_{sd}"), 0] if pre == "front" else 0.0
+                ff = fk_ang[f0, sk.idx(f"{pre}_pastern_{sd}"), 0]
+                fk_start[(st.limb, st.t0)] = (sole[0], pitch0, fc, ff)
+    targets = {l: hoof_targets(sk, ch, l, times, fk_start) for l in LIMBS}
     solvers = {l: LimbSolver(sk, l) for l in LIMBS}
     js, ps, distal = body_sample_points(sk, n_per=48)       # mêmes points que checks.py
     excl = {sk.idx(n) for n in ["head", "ear_l", "ear_r"] + TAIL + [f"neck_{i:02d}" for i in (4, 5)]}
@@ -373,9 +400,14 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
             x_prev = None
             sol = np.zeros((F, len(LIMB_JOINTS[l]), 3))
             order = list(range(F)) * (2 if ch.loop else 1)
+            jl = [sk.idx(n) for n in LIMB_JOINTS[l]]
             for n_it, f in enumerate(order):
                 if not need[f]:
+                    x_prev = None
                     continue
+                if x_prev is None:
+                    # amorçage sur la pose FK courante du membre (sortie de pliage, etc.)
+                    x_prev = solvers[l].vars_from_chain(fk_ang[f, jl])
                 inp = LimbFrameInput(
                     toe=tg["sole"][f, 0], heel=tg["sole"][f, 5], quarters=tg["sole"][f, 3:5],
                     w_rot=float(tg["w_rot"][f]), carpus=float(tg["carpus"][f]),

@@ -121,8 +121,9 @@ public final class PonyController {
 
     // MARK: Internes
 
-    @ObservationIgnored let assets: PonyAssetLibrary
-    @ObservationIgnored let seed: UInt64
+    // `let` : jamais observés par @Observable (pas besoin de @ObservationIgnored).
+    let assets: PonyAssetLibrary
+    let seed: UInt64
     @ObservationIgnored var coatMaps: CoatMaps?
     @ObservationIgnored var knownShapes = Set<String>()
     @ObservationIgnored var bodyBindings: [PonySkinBinding] = []

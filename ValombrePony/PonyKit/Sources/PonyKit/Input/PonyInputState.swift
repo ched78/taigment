@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import PonyCore
 import SwiftUI
 #if os(macOS)
@@ -16,7 +17,11 @@ import AppKit
 /// - Espace : saut ; B brouter, H hennir, C se cabrer, T secouer la tête, G gratter, L se coucher / se relever,
 ///   R se rouler, E s'ébrouer.
 /// Les commandes ponctuelles (saut, actions) sont transmises au contrôleur via `onCommand`.
+///
+/// `@Observable` pour que l'interface suive `sprintLatched` (bouton « Galop ») ; les états à haute fréquence
+/// (joystick, touches) sont exclus de l'observation (aucune invalidation de vue à chaque mouvement).
 @MainActor
+@Observable
 public final class PonyInputState {
     public enum Command: Equatable {
         case jump
@@ -25,17 +30,17 @@ public final class PonyInputState {
     }
 
     /// Joystick tactile : x = tourner (+ droite), y = avancer (+), composantes dans [−1, 1].
-    public var joystick = SIMD2<Float>(0, 0)
-    /// Galop verrouillé (bouton tactile).
+    @ObservationIgnored public var joystick = SIMD2<Float>(0, 0)
+    /// Galop verrouillé (bouton tactile) — observé par l'interface.
     public var sprintLatched = false
     /// Commandes ponctuelles (saut, actions).
-    public var onCommand: ((Command) -> Void)?
+    @ObservationIgnored public var onCommand: ((Command) -> Void)?
 
-    private var forwardKeys = Set<String>()
-    private var backKeys = Set<String>()
-    private var leftKeys = Set<String>()
-    private var rightKeys = Set<String>()
-    private var shiftFromEvents = false
+    @ObservationIgnored private var forwardKeys = Set<String>()
+    @ObservationIgnored private var backKeys = Set<String>()
+    @ObservationIgnored private var leftKeys = Set<String>()
+    @ObservationIgnored private var rightKeys = Set<String>()
+    @ObservationIgnored private var shiftFromEvents = false
 
     public init() {}
 

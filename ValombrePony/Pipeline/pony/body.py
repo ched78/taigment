@@ -174,7 +174,8 @@ def quadriflow(V, F, target_faces=11000, seed=0):
             LOG(f"[low] QuadriFlow (cible {tf}, graine {sd}) : échec silencieux (faces inchangées)")
             continue
         co, faces, chk = r
-        if chk["boundary_edges"] or chk["non_manifold_edges"] or chk["non_manifold_verts"] or chk["components"] != 1:
+        if chk["boundary_edges"] or chk["non_manifold_edges"] or chk["non_manifold_verts"] or chk["components"] != 1 \
+                or chk["euler"] != 2:
             LOG(f"[low] QuadriFlow (cible {tf}, graine {sd}) : rejeté {chk}")
             continue
         result = (co, faces)

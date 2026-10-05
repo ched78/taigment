@@ -113,6 +113,17 @@ extension PonyController {
         if !bindings.contains(where: { $0.hasPose }) {
             appendWarning("pièce « \(part.id) » : aucun squelette importé, elle ne suivra pas la pose")
         }
+        // Diagnostic des noms de matériaux (`Material.name` importé : nom court ou chemin USD [I]) : sans
+        // correspondance, la pièce garde ses couleurs d'export (aucune teinte ni texture runtime).
+        let found = materials.materialNames
+        let expected = rules?.isHairPart(part) == true ? [PonyMaterialNames.primary, "M_Hair"]
+                                                       : (part.materialSlots.isEmpty ? PonyMaterialNames.slots
+                                                                                     : part.materialSlots)
+        if !expected.contains(where: { found.contains($0) }) {
+            appendWarning("pièce « \(part.id) » : aucun matériau personnalisable reconnu (attendus : "
+                + "\(expected.joined(separator: ", ")) ; importés : "
+                + "\(found.isEmpty ? "aucun nom" : found.joined(separator: ", "))) — teintes non appliquées")
+        }
         PonyLog.info("pièce « \(part.id) » chargée : matériaux \(materials.materialNames.joined(separator: ", "))")
     }
 

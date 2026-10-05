@@ -535,8 +535,10 @@ def unwrap(ob, g: MeshGraph, sdf, isl, isl_names, size=2048, margin_px=12, log=p
     me.edges.foreach_set("use_seam", g.seam)
     if not me.uv_layers:
         me.uv_layers.new(name="UVMap")
+    bpy.context.view_layer.update()
     for o in bpy.context.view_layer.objects:
-        o.select_set(o is ob)
+        if o is not None:
+            o.select_set(o is ob)
     bpy.context.view_layer.objects.active = ob
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")

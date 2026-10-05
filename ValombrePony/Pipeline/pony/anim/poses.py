@@ -263,7 +263,27 @@ def lift_head(sk: Skeleton, ang, trans, js, ps, clearance=0.005):
     return ang, d
 
 
-def lift_blending_limbs(sk: Skeleton, ang, trans, w_ik, planted, extra=None):
+def lift_blending_limbs(sk: Skeleton, ang, trans, w_ik, planted, extra=None, passes=4):
+    """Relève les membres en fondu IK↔FK (cf. `_lift_blending_once`) en plusieurs passes : les corrections de
+    deux options voisines (carpe / coude), lissées dans le temps, ne s'additionnent pas linéairement (une petite
+    flexion du carpe sur un membre en arrière ABAISSE la pince) ; chaque passe repart de la pose corrigée et
+    ne touche que les images encore sous le sol [I]."""
+    for _ in range(passes):
+        worst = 0.0
+        for l in LIMBS:
+            sel = (w_ik[l] > 1e-3) & (w_ik[l] < 0.999)
+            if extra is not None:
+                sel = sel | extra[l]
+            if sel.any():
+                W = sk.fk(sk.basis_from_angles(ang[sel], trans[sel]))
+                worst = min(worst, float(sk.sole_world(W, l)[..., 2].min()))
+        if worst >= -2e-4:
+            break
+        ang = _lift_blending_once(sk, ang, trans, w_ik, planted, extra)
+    return ang
+
+
+def _lift_blending_once(sk: Skeleton, ang, trans, w_ik, planted, extra=None):
     """Pendant un fondu IK↔FK (ou une plage `ground_free`), l'interpolation d'angles peut faire passer le sabot
     sous le sol : on ajoute alors juste assez de flexion pour que la sole reste au-dessus du sol (recherche sur une
     grille de 1,5°, image par image), puis la correction est lissée dans le temps (enveloppe : jamais moins que le

@@ -89,8 +89,8 @@ def _ik_err(clip):
     elif "ik_err" in d:      # chorégraphie : seulement les images d'appui pur (hors fondus IK↔FK voulus)
         e = [float(v[clip.contacts[l]].max()) for l, v in d["ik_err"].items() if clip.contacts[l].any()]
     else:
-        e = [0.0]
-    return round(max(e) * 1000, 3)
+        e = []
+    return round(max(e, default=0.0) * 1000, 3)
 
 
 def skeleton_from_rig():

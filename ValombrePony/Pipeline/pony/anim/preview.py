@@ -214,6 +214,17 @@ def _render_to(path):
     return path
 
 
+def _font(size):
+    """Police TrueType avec les accents (DejaVu Sans si présente), sinon police bitmap par défaut de Pillow."""
+    from PIL import ImageFont
+    for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/freefont/FreeSans.ttf"):
+        try:
+            return ImageFont.truetype(p, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
 def _sheet(paths, labels, title, out, cols=4):
     from PIL import Image, ImageDraw
     ims = [Image.open(p).convert("RGB") for p in paths]
@@ -221,12 +232,14 @@ def _sheet(paths, labels, title, out, cols=4):
     rows = int(math.ceil(len(ims) / cols))
     sheet = Image.new("RGB", (cols * w, rows * h + 26), (25, 25, 25))
     d = ImageDraw.Draw(sheet)
-    d.text((6, 6), title, fill=(255, 255, 255))
+    font = _font(13)
+    d.text((6, 5), title, fill=(255, 255, 255), font=font)
     for i, im in enumerate(ims):
         x, y = (i % cols) * w, (i // cols) * h + 26
         sheet.paste(im, (x, y))
-        d.rectangle([x, y, x + 7 * len(labels[i]) + 8, y + 15], fill=(0, 0, 0))
-        d.text((x + 4, y + 2), labels[i], fill=(255, 255, 255))
+        tw = d.textlength(labels[i], font=font)
+        d.rectangle([x, y, x + tw + 8, y + 17], fill=(0, 0, 0))
+        d.text((x + 4, y + 1), labels[i], fill=(255, 255, 255), font=font)
     # palette adaptative (rendus Workbench à aplats) : fichiers ~3× plus légers, sans perte visible
     sheet.quantize(colors=200, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(out, optimize=True)
     return out

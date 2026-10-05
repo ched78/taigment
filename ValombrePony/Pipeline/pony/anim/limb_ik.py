@@ -231,7 +231,9 @@ class LimbSolver:
             # pénalité unilatérale : points de sole + articulation du boulet au-dessus du sol
             # sole + articulations de la chaîne (rayon des segments ~3-4 cm) au-dessus du sol
             # (rayon ≈ 3,5 cm ; articulation interphalangienne distale (tête de l'os du sabot) : 3 cm) [A]
-            joints_z = np.array([M[2, 3] for M in Ms[1:]]) - np.r_[np.full(len(Ms) - 2, 0.035), 0.030]
+            # boulet : 4,2 cm (ellipsoïde du paturon du mannequin décalé sous l'articulation quand le doigt est
+            # replié vers l'arrière) [A]
+            joints_z = np.array([M[2, 3] for M in Ms[1:]]) - np.r_[np.full(len(Ms) - 3, 0.035), 0.042, 0.030]
             zmin = np.concatenate([sole[1:, 2] if inp.ground_clear <= 0.0 else sole[:, 2], joints_z + inp.ground_clear])
             pen = np.minimum(0.0, zmin - inp.ground_clear)
             r.append(inp.w_ground * pen)

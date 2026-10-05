@@ -4,7 +4,7 @@ Version 1 — 2026-10-05. Ce document est le **contrat** entre le pipeline de g�
 et le runtime Swift (`PonyKit/`). Tout nom (joint, blend shape, clip, pièce, matériau, fichier) cité ici est figé :
 le changer exige de mettre à jour les deux côtés.
 
-Légende des sources : les choix marqués **[R]** s'appuient sur la recherche documentée (`Docs/RESEARCH_NOTES.md`),
+Légende des sources : les choix marqués **[R]** s'appuient sur la recherche documentée (`Docs/research/*.md` (6 rapports sourcés)),
 **[I]** sont des choix d'ingénierie, **[A]** des approximations artistiques non sourcées.
 
 ---
@@ -40,8 +40,15 @@ Légende des sources : les choix marqués **[R]** s'appuient sur la recherche do
 | Sol | z = 0 | y = 0 |
 | Origine | au sol, au centre du polygone d'appui des 4 sabots (debout carré) | idem |
 
-Conversion Blender → RealityKit (rotation propre, det = +1) : **(x, y, z)_B → (x, z, −y)_RK**.
-Matrices : `M_RK = C · M_B · C⁻¹` avec `C = [[1,0,0],[0,0,1],[0,−1,0]]`. Quaternions : conjugués par la même rotation.
+Conversion Blender → RealityKit (rotation propre, det = +1) : **(x, y, z)_B → (x, z, −y)_RK**,
+`C = [[1,0,0],[0,0,1],[0,−1,0]]`.
+- Points des meshes : `p_RK = C · p_B`.
+- Repères monde des joints (bindTransforms) : `W_RK = C · W_B` — **les axes locaux des os sont conservés**
+  (axe Y local le long de l'os, axe X local = droite du poney en pose de repos, pour tous les os, gauche comme droite).
+- Donc les transformations **locales** parent→enfant sont identiques en Blender et en RealityKit ;
+  seule la locale du joint `root` vaut `C · L_root` (le root reste fixe au runtime).
+- Conséquence pratique pour le procédural : flexion/extension d'un membre, tangage de l'encolure =
+  rotation autour de l'axe **X local** du joint.
 
 Nommage : `snake_case` ASCII, suffixes de côté `_l` / `_r` (gauche/droite **du poney**). Aucun `.`, `[`, `]`, `\`
 (contrainte des `GeometricPin` RealityKit [R]). Les tokens USD des joints sont des chemins (`root/body/spine_01/...`) ;

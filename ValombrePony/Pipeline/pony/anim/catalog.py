@@ -36,6 +36,10 @@ CLIPS = {
     "jump_land": (lambda sk: jump.make(sk, "jump_land"), 0.6, "saut"),
 }
 
+# Coût relatif de génération (ordonnancement des processus : les plus longs d'abord) [I]
+COST = {"idle": 6, "idle_rest_hind": 6, "graze_loop": 5, "lying": 3, "roll": 4, "lie_down": 4, "get_up": 4,
+        "rear": 3, "turn_left": 3, "turn_right": 3, "back": 2.5, "walk": 2.5, "paw": 2, "body_shake": 2}
+
 # GIF animés demandés par le brief (+ un GIF combiné du saut : appel → vol balistique → réception)
 GIF_CLIPS = ["walk", "trot", "canter_left", "gallop", "rear", "roll"]
 

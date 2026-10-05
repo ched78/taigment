@@ -61,20 +61,22 @@ def _neck_chain():
 
 
 # (nom, parent, tête, queue) — côté gauche uniquement pour les membres ; "_r" ajouté par miroir.
+# Écartement latéral des membres élargi de 1,0 à 1,7 cm par l'agent « body » (poitrail et aplombs de poney,
+# antérieurs moins serrés ; écart ≤ 3 cm autorisé) — valeurs d'origine en commentaire.
 _HIND_L = [
-    ("thigh_l", "hips", (-0.13, -0.60, 1.03), (-0.155, -0.417, 0.757)),
-    ("gaskin_l", "thigh_l", (-0.155, -0.417, 0.757), (-0.12, -0.625, 0.416)),
-    ("hind_cannon_l", "gaskin_l", (-0.12, -0.625, 0.416), (-0.11, -0.605, 0.150)),
-    ("hind_pastern_l", "hind_cannon_l", (-0.11, -0.605, 0.150), (-0.11, -0.532, 0.046)),
-    ("hind_hoof_l", "hind_pastern_l", (-0.11, -0.532, 0.046), (-0.11, -0.467, 0.0)),
+    ("thigh_l", "hips", (-0.13, -0.60, 1.03), (-0.165, -0.417, 0.757)),
+    ("gaskin_l", "thigh_l", (-0.165, -0.417, 0.757), (-0.135, -0.625, 0.416)),          # x −0.155
+    ("hind_cannon_l", "gaskin_l", (-0.135, -0.625, 0.416), (-0.127, -0.605, 0.150)),    # x −0.12
+    ("hind_pastern_l", "hind_cannon_l", (-0.127, -0.605, 0.150), (-0.127, -0.532, 0.046)),  # x −0.11
+    ("hind_hoof_l", "hind_pastern_l", (-0.127, -0.532, 0.046), (-0.127, -0.467, 0.0)),  # x −0.11
 ]
 _FRONT_L = [
-    ("scapula_l", "spine_03", (-0.07, 0.33, 1.20), (-0.16, 0.58, 0.89)),
-    ("upperarm_l", "scapula_l", (-0.16, 0.58, 0.89), (-0.14, 0.42, 0.71)),
-    ("forearm_l", "upperarm_l", (-0.14, 0.42, 0.71), (-0.125, 0.42, 0.35)),
-    ("front_cannon_l", "forearm_l", (-0.125, 0.42, 0.35), (-0.115, 0.42, 0.137)),
-    ("front_pastern_l", "front_cannon_l", (-0.115, 0.42, 0.137), (-0.115, 0.496, 0.046)),
-    ("front_hoof_l", "front_pastern_l", (-0.115, 0.496, 0.046), (-0.115, 0.565, 0.0)),
+    ("scapula_l", "spine_03", (-0.07, 0.33, 1.20), (-0.175, 0.58, 0.89)),
+    ("upperarm_l", "scapula_l", (-0.175, 0.58, 0.89), (-0.155, 0.42, 0.71)),            # x −0.16
+    ("forearm_l", "upperarm_l", (-0.155, 0.42, 0.71), (-0.140, 0.42, 0.35)),            # x −0.14
+    ("front_cannon_l", "forearm_l", (-0.140, 0.42, 0.35), (-0.132, 0.42, 0.137)),       # x −0.125
+    ("front_pastern_l", "front_cannon_l", (-0.132, 0.42, 0.137), (-0.132, 0.496, 0.046)),  # x −0.115
+    ("front_hoof_l", "front_pastern_l", (-0.132, 0.496, 0.046), (-0.132, 0.565, 0.0)),  # x −0.115
 ]
 
 

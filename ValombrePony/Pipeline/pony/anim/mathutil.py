@@ -280,3 +280,34 @@ def ease_keys(times, values):
                 out[k] = values[i] * (1 - w) + values[i + 1] * w
         return out
     return ev
+
+
+def quat_to_mat(q):
+    """Quaternions (..., 4) [x, y, z, w] -> matrices (..., 3, 3)."""
+    q = np.asarray(q, dtype=np.float64)
+    q = q / np.linalg.norm(q, axis=-1, keepdims=True)
+    x, y, z, w = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
+    m = np.empty(q.shape[:-1] + (3, 3))
+    m[..., 0, 0] = 1 - 2 * (y * y + z * z)
+    m[..., 0, 1] = 2 * (x * y - z * w)
+    m[..., 0, 2] = 2 * (x * z + y * w)
+    m[..., 1, 0] = 2 * (x * y + z * w)
+    m[..., 1, 1] = 1 - 2 * (x * x + z * z)
+    m[..., 1, 2] = 2 * (y * z - x * w)
+    m[..., 2, 0] = 2 * (x * z - y * w)
+    m[..., 2, 1] = 2 * (y * z + x * w)
+    m[..., 2, 2] = 1 - 2 * (x * x + y * y)
+    return m
+
+
+def blend_locals(La, Lb, w):
+    """Fondu de poses locales (N,4,4) : nlerp des quaternions (plus court chemin) + lerp des translations
+    — même principe qu'un fondu de clips au runtime [I]."""
+    qa, qb = mat_to_quat(La), mat_to_quat(Lb)
+    s = np.sign(np.sum(qa * qb, axis=-1, keepdims=True))
+    s[s == 0] = 1.0
+    q = (1 - w) * qa + w * s * qb
+    out = np.array(La, dtype=np.float64, copy=True)
+    out[..., :3, :3] = quat_to_mat(q)
+    out[..., :3, 3] = (1 - w) * La[..., :3, 3] + w * Lb[..., :3, 3]
+    return out

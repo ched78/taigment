@@ -361,7 +361,7 @@ def lie_down():
     keys += [_k(0.0, {k: v for k, v in fore_fold("l", k=0.0).items()}, {k: v for k, v in fore_fold("r", k=0.0).items()},
                 {k: v for k, v in hind_fold("l", k=0.0).items()}, {k: v for k, v in hind_fold("r", k=0.0).items()})]
     return Choreo(
-        name="lie_down", duration=dur, keys=keys, fk=fk, plants0=dict(SQUARE), steps=steps,
+        name="lie_down", duration=dur, keys=keys, fk=fk, plants0=dict(SQUARE), steps=steps, tail_hang=0.6,
         events=[(0.20, "foot_up_fl"), (0.55, "foot_down_fl"), (0.35, "foot_up_fr"), (0.70, "foot_down_fr"),
                 (0.45, "foot_up_hl"), (0.80, "foot_down_hl"), (0.60, "foot_up_hr"), (0.95, "foot_down_hr")],
         notes="Se coucher : rassembler les membres sous le corps, flairer le sol, fléchir les carpes pinces au sol "
@@ -370,15 +370,30 @@ def lie_down():
               "`lying`. " + A_NOTE)
 
 
+def fore_reach_up(side, k=1.0):
+    """Antérieur tendu vers l'avant et le bas, carpe presque droit (sortie du décubitus) [A]."""
+    return {f"scapula_{side}": 10 * k, f"upperarm_{side}": 10 * k, f"forearm_{side}": 22 * k,
+            f"front_cannon_{side}": -3 * k, f"front_pastern_{side}": -12 * k, f"front_hoof_{side}": -2 * k}
+
+
+def fore_knee_fwd(side, k=1.0):
+    """Antérieur encore replié, genou (carpe) porté vers l'avant : étape intermédiaire du dépliage [A]."""
+    return {f"scapula_{side}": 10 * k, f"upperarm_{side}": 15 * k, f"forearm_{side}": 58 * k,
+            f"front_cannon_{side}": -132 * k, f"front_pastern_{side}": -50 * k, f"front_hoof_{side}": -20 * k}
+
+
 def get_up():
     dur = 2.5
     sit = dict(STAND_BODY, pitch=16.0, y=0.05, z=-0.40, roll=-2.0, pivot=(-0.55, 0.45))
     keys = [
         _k(0.0, lying_pose(), snap=1.0, body=dict(LYING_BODY)),
         _k(0.55, snap=1.0), _k(0.68, snap=0.0),
-        # antérieurs dépliés vers l'avant (FK) l'un après l'autre ; la contrainte de sol soulève l'avant-main
-        _k(0.45, _neck(16, 0), {"head": -4, "hips": 10}, fore_reach("l"), body=dict(LYING_BODY, roll=-6.0, pitch=10.0)),
-        _k(0.70, fore_reach("r")),
+        # élan de l'encolure ; antérieurs dépliés vers l'avant (FK) l'un après l'autre, sans porter le tronc
+        # (`ground_free`) : l'arrière-main reste au sol (snap) pendant que l'avant-main se lève
+        _k(0.25, fore_knee_fwd("l"), body=dict(LYING_BODY, roll=-9.0, pitch=13.0)),
+        _k(0.50, fore_knee_fwd("r")),
+        _k(0.45, _neck(16, 0), {"head": -4, "hips": 10}, fore_reach_up("l"), body=dict(LYING_BODY, roll=-6.0, pitch=18.5)),
+        _k(0.70, fore_reach_up("r"), body=dict(LYING_BODY, roll=-3.0, pitch=21.0, z=-0.56)),
         _k(0.85, _neck(8, 0), {"head": -2}, body=dict(sit)),
         _k(1.00, body=dict(sit, pitch=15.0, z=-0.38)),
         _k(0.55, hind_fold("l", abd=-8.0), hind_fold("r", abd=9.0)),      # postérieurs repliés jusqu'au pas
@@ -391,22 +406,24 @@ def get_up():
     fk = [FKSpan("fl", 0.0, 0.50, blend_out=1e-3), FKSpan("fr", 0.0, 0.72, blend_out=1e-3),
           FKSpan("hl", 0.0, 0.60, blend_out=1e-3), FKSpan("hr", 0.0, 0.65, blend_out=1e-3)]
     plants = {"fl": (0.0, 0.0), "fr": (0.0, 0.0), "hl": (0.0, 0.0), "hr": (0.0, 0.0)}
-    steps = [Step("fl", 0.50, 0.68, to=(0.0, 0.32), lift=0.03, carpus=10, flip=5, from_fk=True),
-             Step("fr", 0.72, 0.90, to=(0.0, 0.26), lift=0.03, carpus=10, flip=5, from_fk=True),
+    steps = [Step("fl", 0.50, 0.76, to=(0.0, 0.26), lift=0.04, carpus=10, flip=5, from_fk=True),
+             Step("fr", 0.72, 0.90, to=(0.0, 0.30), lift=0.03, carpus=10, flip=5, from_fk=True),
              Step("hl", 0.60, 0.95, to=(0.0, -0.06), lift=0.06, flip=0, from_fk=True),
-             Step("hr", 0.65, 1.00, to=(0.0, -0.08), lift=0.06, flip=0, from_fk=True),
+             Step("hr", 0.65, 1.00, to=(0.0, -0.08), lift=0.09, flip=0, from_fk=True),
              Step("fl", 1.55, 1.95, to=(0.0, 0.0), lift=0.06, carpus=40, flip=25),
              Step("fr", 1.85, 2.25, to=(0.0, 0.0), lift=0.06, carpus=40, flip=25),
              Step("hl", 1.70, 2.05, to=(0.0, 0.0), lift=0.04, flip=15),
              Step("hr", 2.00, 2.35, to=(0.0, 0.0), lift=0.04, flip=15)]
     return Choreo(
-        name="get_up", duration=dur, keys=keys, fk=fk, plants0=plants, steps=steps,
-        events=[(0.68, "foot_down_fl"), (0.90, "foot_down_fr"), (0.95, "foot_down_hl"), (1.00, "foot_down_hr"),
+        name="get_up", duration=dur, keys=keys, fk=fk, plants0=plants, steps=steps, tail_hang=0.5,
+        ground_free=[("fl", 0.05, 0.50), ("fr", 0.05, 0.72)],
+        events=[(0.76, "foot_down_fl"), (0.90, "foot_down_fr"), (0.95, "foot_down_hl"), (1.00, "foot_down_hr"),
                 (1.55, "foot_up_fl"), (1.95, "foot_down_fl"), (1.70, "foot_up_hl"), (2.05, "foot_down_hl"),
                 (1.85, "foot_up_fr"), (2.25, "foot_down_fr"), (2.00, "foot_up_hr"), (2.35, "foot_down_hr")],
-        notes="Se relever depuis `lying` : antérieurs dépliés et posés vers l'avant l'un après l'autre, élan de "
-              "l'encolure, position « assise », postérieurs posés sous le corps puis poussée (gaits.md §4 [U]) ; "
-              "finit debout carré après réajustement des quatre membres. " + A_NOTE)
+        notes="Se relever depuis `lying` : élan de l'encolure, avant-main qui se lève pendant que l'arrière-main reste "
+              "au sol, antérieurs dépliés vers l'avant et posés l'un après l'autre, position « assise », postérieurs "
+              "posés sous le corps puis poussée (gaits.md §4 [U]) ; finit debout carré après réajustement des quatre "
+              "membres. " + A_NOTE)
 
 
 def roll():
@@ -423,8 +440,9 @@ def roll():
         return d
     keys = [
         _k(0.0, lp, snap=1.0, body=dict(LYING_BODY)),
-        _k(0.7, legs_up(0.6), _neck(-10, 16), {"head": (-8, 0, 6), "hips": 4},
-           body=dict(LYING_BODY, roll=-80.0, pitch=1.0, z=-0.7)),
+        # bascule sur le flanc membres encore repliés (ils ne poussent pas le tronc hors du sol)
+        _k(0.7, {k: v for k, v in lp.items() if k not in NECK and k != "head"}, _neck(-10, 16),
+           {"head": (-8, 0, 6), "hips": 4}, body=dict(LYING_BODY, roll=-80.0, pitch=1.0, z=-0.7)),
         # sur le dos : encolure fléchie (vers le ventre) pour garder la tête au sol, membres repliés en l'air
         _k(1.3, legs_up(1.0), _neck(-46, 20, 10), {"head": (-12, -14, 8), "hips": -4},
            body=dict(LYING_BODY, roll=-158.0, pitch=0.0, z=-0.7)),
@@ -506,12 +524,12 @@ def rear():
         keys.append(_k(0.0, {f"scapula_{sd}": 0, f"upperarm_{sd}": 0, f"forearm_{sd}": 0, f"front_cannon_{sd}": 0,
                              f"front_pastern_{sd}": 0, f"front_hoof_{sd}": 0}))
     return Choreo(
-        name="rear", duration=dur, keys=keys, fk=fk, steps=steps,
-        plants0={"fl": (0.0, 0.0), "fr": (0.0, 0.0), "hl": (0.0, 0.06), "hr": (0.0, 0.06)},
+        name="rear", duration=dur, keys=keys, fk=fk, steps=steps, tail_hang=0.6,
+        plants0=dict(SQUARE),
         fetlock_pref={"hl": 8.0, "hr": 8.0},
         events=[(0.55, "foot_up_fl"), (0.60, "foot_up_fr"), (2.18, "foot_down_fl"), (2.30, "foot_down_fr"),
                 (2.32, "foot_up_fl"), (2.55, "foot_down_fl")],
-        notes="Cabrer : report du poids vers l'arrière, postérieurs fléchis et plantés, avant-main levée à ~40° "
+        notes="Cabrer : report du poids vers l'arrière, postérieurs fléchis et plantés (debout carré, comme `idle`), avant-main levée à ~40° "
               "autour des hanches, antérieurs repliés qui battent l'air, encolure arrondie ; descente, réception "
               "sur l'antérieur gauche puis le droit (gaits.md §4 [U]). " + A_NOTE)
 

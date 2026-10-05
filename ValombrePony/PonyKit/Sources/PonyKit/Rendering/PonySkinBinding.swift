@@ -135,35 +135,36 @@ final class PonySkinBinding {
             byPath[j.path] = i
         }
 
-        // Joints.
+        // Joints (calculés dans des variables locales, puis affectés : pas d'accès à `self` avant la fin de
+        // l'initialisation des propriétés stockées).
+        var map: [Int] = []
+        var missing: [String] = []
+        var unknown: [String] = []
+        var posePresent = false
         if let poses = entity.components[SkeletalPosesComponent.self], let pose = poses.poses.default {
-            hasPose = true
-            var map: [Int] = []
+            posePresent = true
             var found = Set<Int>()
             for raw in pose.jointNames {
                 let idx = byName[PonyEntityTree.shortName(raw)] ?? byPath[raw] ?? -1
                 map.append(idx)
-                if idx >= 0 { found.insert(idx) } else { unknownJoints.append(raw) }
+                if idx >= 0 { found.insert(idx) } else { unknown.append(raw) }
             }
-            jointMap = map
-            missingJoints = manifest.joints.enumerated().filter { !found.contains($0.offset) }.map { $0.element.name }
-            if !missingJoints.isEmpty {
-                PonyLog.warning("\(label) : \(missingJoints.count) joint(s) du manifeste absents du squelette importé "
-                    + "(\(missingJoints.prefix(6).joined(separator: ", "))…)")
+            missing = manifest.joints.enumerated().filter { !found.contains($0.offset) }.map { $0.element.name }
+            if !missing.isEmpty {
+                PonyLog.warning("\(label) : \(missing.count) joint(s) du manifeste absents du squelette importé "
+                    + "(\(missing.prefix(6).joined(separator: ", "))…)")
             }
-            if !unknownJoints.isEmpty {
-                PonyLog.warning("\(label) : \(unknownJoints.count) joint(s) importés inconnus du manifeste, laissés "
-                    + "à leur pose (\(unknownJoints.prefix(4).joined(separator: ", "))…)")
+            if !unknown.isEmpty {
+                PonyLog.warning("\(label) : \(unknown.count) joint(s) importés inconnus du manifeste, laissés "
+                    + "à leur pose (\(unknown.prefix(4).joined(separator: ", "))…)")
             }
-        } else {
-            hasPose = false
         }
 
-        // Poids des blend shapes.
+        // Poids des blend shapes : table nom → (élément du jeu de poids, indice) construite une fois.
+        var table: [[WeightEntry]] = []
+        var flat = 0
+        var ignored: [String] = []
         if let bs = entity.components[BlendShapeWeightsComponent.self] {
-            var table: [[WeightEntry]] = []
-            var flat = 0
-            var ignored: [String] = []
             for data in bs.weightSet {
                 var entries: [WeightEntry] = []
                 for (wi, raw) in data.weightNames.enumerated() {
@@ -180,16 +181,20 @@ final class PonySkinBinding {
                 }
                 table.append(entries)
             }
-            weightTable = table
-            lastWeights = [Float](repeating: -1, count: flat)
-            ignoredWeightNames = ignored
-            hasWeights = flat > 0
             if !ignored.isEmpty {
-                PonyLog.info("\(label) : blend shapes non pilotées par le runtime : \(ignored.prefix(8).joined(separator: ", "))")
+                PonyLog.info("\(label) : blend shapes non pilotées par le runtime : "
+                    + ignored.prefix(8).joined(separator: ", "))
             }
-        } else {
-            hasWeights = false
         }
+
+        hasPose = posePresent
+        jointMap = map
+        missingJoints = missing
+        unknownJoints = unknown
+        weightTable = table
+        lastWeights = [Float](repeating: -1, count: flat)
+        ignoredWeightNames = ignored
+        hasWeights = flat > 0
     }
 
     /// Écrit la pose locale (ordre du manifeste, déjà convertie) dans `SkeletalPosesComponent.poses.default`.

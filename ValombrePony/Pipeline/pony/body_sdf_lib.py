@@ -249,9 +249,11 @@ class Loft(Prim):
         prm = self.params(s)
         top, bot, w, wf, nt, nb = (prm[:, i] for i in range(6))
         zc = bot + wf * (top - bot)
-        up = v >= zc
-        h = np.where(up, top - zc, zc - bot)
-        n = np.where(up, nt, nb)
+        # transition douce dessus/dessous (champ C1 hors de la surface : pas de pli dans les unions lisses)
+        ht, hb = top - zc, zc - bot
+        tb = smoothstep(-0.25, 0.25, (v - zc) / np.maximum(np.minimum(ht, hb), 1e-4))
+        h = hb + (ht - hb) * tb
+        n = nb + (nt - nb) * tb
         # bouts arrondis (dôme ellipsoïdal de longueur cap) ou plats
         e0 = self.s0 - s
         e1 = s - self.s1
@@ -302,8 +304,11 @@ class VLoft(Prim):
         xc, yc, Fr, Bk, Lt, Md, n = (prm[:, i] for i in range(7))
         dx = (P[:, 0] - xc) * self.sx
         dy = P[:, 1] - yc
-        ay = np.where(dy >= 0, Fr, Bk)
-        axx = np.where(dx >= 0, Lt, Md)
+        # quadrants raccordés en douceur (champ C1 hors surface)
+        ty = smoothstep(-0.25, 0.25, dy / np.maximum(np.minimum(Fr, Bk), 1e-4))
+        tx = smoothstep(-0.25, 0.25, dx / np.maximum(np.minimum(Lt, Md), 1e-4))
+        ay = Bk + (Fr - Bk) * ty
+        axx = Md + (Lt - Md) * tx
         d2 = superellipse_dist(dx, dy, np.maximum(axx, 1e-4), np.maximum(ay, 1e-4), n)
         e = np.maximum(self.z0 - z, z - self.z1)
         return np.where(e > 0, np.where(d2 > 0, np.sqrt(d2 * d2 + e * e), e), d2).astype(F32)
@@ -478,7 +483,11 @@ class Group:
         if c is None or c[0] != len(self.nodes):
             lo = np.array([n[3] for n in self.nodes], F32).reshape(-1, 3)
             hi = np.array([n[4] for n in self.nodes], F32).reshape(-1, 3)
-            ext = np.array([n[2] + getattr(n[1], "pad", 0.0) for n in self.nodes], F32)
+            # rayon d'influence d'un nœud : son propre k ET le k des unions lisses suivantes (un nœud élagué
+            # changerait le résultat de smin(d, v, k) jusqu'à k de sa surface -> discontinuité entre blocs)
+            ks = np.array([n[2] for n in self.nodes], F32)
+            kmax_after = np.maximum.accumulate(ks[::-1])[::-1] if len(ks) else ks
+            ext = np.array([kmax_after[i] + getattr(n[1], "pad", 0.0) for i, n in enumerate(self.nodes)], F32)
             self._cache = c = (len(self.nodes), lo, hi, ext)
         return c
 

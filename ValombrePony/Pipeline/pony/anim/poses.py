@@ -47,6 +47,7 @@ class Step:
     yaw_end: float = 0.0
     strike: bool = False        # contact glissant voulu (grattage) : pas d'appui « planté »
     from_fk: bool = False       # le pas part de la position FK du sabot à t0 (sortie d'une plage FK)
+    unfold: tuple = (0.0, 0.85)  # sortie de pliage (from_fk) : carpe/boulet se déplient entre ces fractions du pas
 
 
 @dataclass
@@ -74,6 +75,11 @@ class Choreo:
     extra_meta: dict = field(default_factory=dict)
     ground_fix: bool = True
     drape_tail: bool = True                           # queue posée sur le sol si elle le traverserait
+    # membres en FK qui ne portent pas le tronc (ex. antérieur qui se tend vers l'avant en se relevant) :
+    # [(limb, t0, t1)] — exclus de la contrainte de sol du tronc, puis fléchis si besoin pour rester au-dessus du sol
+    ground_free: list = field(default_factory=list)
+    tail_hang: float = 0.0                            # 0..1 : les crins (tail_05…) retrouvent leur direction
+                                                      # pendante malgré le tangage du tronc (gravité) [A]
     fetlock_pref: dict = field(default_factory=dict)  # limb -> ° (préférence boulet des membres plantés)
     # trajectoires libres de pince (non plantées, ex. grattage) : limb -> [(t, (dx, dy, dz, pitch°, carpe°))]
     tracks: dict = field(default_factory=dict)
@@ -206,6 +212,23 @@ def drape_tail(sk: Skeleton, ang, trans, radius=0.06):
     return ang
 
 
+def hang_tail(sk: Skeleton, ang, trans, strength):
+    """Crins de la queue pendants : la direction monde de `tail_05` (premier os de crins) est ramenée vers sa
+    direction de repos (fraction `strength`), répartie 70 % sur tail_05 et 30 % sur tail_06, autour de l'axe
+    latéral de l'os (le tronçon osseux tail_01…04 garde le port de queue des clés)."""
+    W = sk.fk(sk.basis_from_angles(ang, trans))
+    j = sk.idx("tail_05")
+    d = W[:, j, :3, 1]
+    x = W[:, j, :3, 0]
+    d0 = np.broadcast_to(sk.rest_world[j][:3, 1], d.shape)
+    d0 = d0 - x * np.sum(d0 * x, axis=1, keepdims=True)
+    d0 /= np.linalg.norm(d0, axis=1, keepdims=True)
+    a = np.arctan2(np.sum(np.cross(d, d0) * x, axis=1), np.sum(d * d0, axis=1)) * strength
+    ang[:, j, 0] += 0.7 * a
+    ang[:, sk.idx("tail_06"), 0] += 0.3 * a
+    return ang
+
+
 def lift_head(sk: Skeleton, ang, trans, js, ps, clearance=0.005):
     """Contrainte de sol pour l'encolure et la tête : si un point du mannequin de la tête/encolure passe
     sous le sol, on fait pivoter neck_01/neck_02 (flexion X) du plus petit angle qui le remet au-dessus
@@ -240,32 +263,65 @@ def lift_head(sk: Skeleton, ang, trans, js, ps, clearance=0.005):
     return ang, d
 
 
-def lift_blending_limbs(sk: Skeleton, ang, trans, w_ik, planted):
-    """Pendant un fondu IK↔FK, l'interpolation d'angles peut faire passer le sabot sous le sol : on ajoute
-    alors juste assez de flexion du carpe (antérieur) ou du grasset + jarret couplés (postérieur) pour que
-    la sole reste au-dessus du sol (recherche sur une grille, image par image)."""
+def lift_blending_limbs(sk: Skeleton, ang, trans, w_ik, planted, extra=None):
+    """Pendant un fondu IK↔FK (ou une plage `ground_free`), l'interpolation d'angles peut faire passer le sabot
+    sous le sol : on ajoute alors juste assez de flexion pour que la sole reste au-dessus du sol (recherche sur une
+    grille de 1,5°, image par image), puis la correction est lissée dans le temps (enveloppe : jamais moins que le
+    besoin). Postérieur : grasset + jarret couplés. Antérieur : flexion du carpe, ou du coude (avant-bras relevé)
+    quand l'avant-bras pointe vers l'avant — la plus petite correction qui suffit."""
+    from scipy.ndimage import maximum_filter1d
+    F = ang.shape[0]
     for l in LIMBS:
-        blending = (w_ik[l] > 1e-3) & (w_ik[l] < 0.999)
-        frames = np.where(blending)[0]
+        sel = (w_ik[l] > 1e-3) & (w_ik[l] < 0.999)
+        if extra is not None:
+            sel = sel | extra[l]
+        frames = np.where(sel)[0]
         if len(frames) == 0:
             continue
         W = sk.fk(sk.basis_from_angles(ang[frames], trans[frames]))
         zmin = sk.sole_world(W, l)[..., 2].min(axis=1)
-        jn = f"front_cannon_{l[1]}" if l.startswith("f") else f"gaskin_{l[1]}"
-        j = sk.idx(jn)
-        hc = sk.idx(f"hind_cannon_{l[1]}")
+        sd = l[1]
+        if l.startswith("f"):
+            # (joint, sens, borne max de l'angle résultant en degrés)
+            options = [([(sk.idx(f"front_cannon_{sd}"), -1.0)], -150.0),
+                       ([(sk.idx(f"forearm_{sd}"), 1.0)], 65.0)]
+        else:
+            options = [([(sk.idx(f"gaskin_{sd}"), -1.0), (sk.idx(f"hind_cannon_{sd}"), 1.0)], -95.0)]
+        need = np.zeros((len(options), F))
         for k, f in enumerate(frames):
             if zmin[k] >= 0.0:
                 continue
-            for extra in np.deg2rad(np.arange(3, 91, 3)):
-                A = ang[f:f + 1].copy()
-                A[0, j, 0] -= extra
-                if l.startswith("h"):
-                    A[0, hc, 0] += extra
-                z = sk.sole_world(sk.fk(sk.basis_from_angles(A, trans[f:f + 1])), l)[0, :, 2].min()
-                if z >= 0.0:
-                    break
-            ang[f] = A[0]
+            best = None
+            fallback = (-np.inf, 0, 0.0)          # (z atteint, option, angle) si aucune option ne suffit
+            for oi, (js_, lim) in enumerate(options):
+                for add in np.deg2rad(np.arange(1.5, 91, 1.5)):
+                    A = ang[f:f + 1].copy()
+                    for j, sgn in js_:
+                        A[0, j, 0] += sgn * add
+                    j0, s0 = js_[0]
+                    if (s0 > 0 and A[0, j0, 0] > np.deg2rad(lim)) or (s0 < 0 and A[0, j0, 0] < np.deg2rad(lim)):
+                        break
+                    z = sk.sole_world(sk.fk(sk.basis_from_angles(A, trans[f:f + 1])), l)[0, :, 2].min()
+                    if z > fallback[0]:
+                        fallback = (z, oi, add)
+                    if z >= 0.0:
+                        if best is None or add < best[1]:
+                            best = (oi, add)
+                        break
+            if best is None:
+                best = (fallback[1], fallback[2])
+            need[best[0], f] = best[1]
+        for oi, (js_, lim) in enumerate(options):
+            if not need[oi].any():
+                continue
+            sm = mu.lin_smooth(maximum_filter1d(need[oi], 5), 1.2)
+            sm = np.maximum(sm, need[oi]) * sel
+            j0, s0 = js_[0]
+            # la correction lissée ne doit pas dépasser la borne de l'articulation principale
+            room = (np.deg2rad(lim) - ang[:, j0, 0]) * s0
+            sm = np.minimum(sm, np.maximum(room, 0.0))
+            for j, sgn in js_:
+                ang[:, j, 0] += sgn * sm
     return ang
 
 
@@ -334,7 +390,8 @@ def hoof_targets(sk: Skeleton, ch: Choreo, limb, times, fk_start=None):
         fet[m] = -30 * D * mu.bump(s, 0.4) * (st.lift / 0.07)
         if fk_c is not None:
             # sortie de pliage : carpe et boulet partent de leurs valeurs FK et se déplient pendant le pas
-            e = mu.smootherstep(np.clip(s / 0.85, 0, 1))
+            u0, u1 = st.unfold
+            e = mu.smootherstep(np.clip((s - u0) / max(u1 - u0, 1e-6), 0, 1))
             if limb.startswith("f"):
                 carpus[m] = fk_c * (1 - e) + 2.0 * D * e
             fet[m] = fk_f * (1 - e)
@@ -384,6 +441,11 @@ def hoof_targets(sk: Skeleton, ch: Choreo, limb, times, fk_start=None):
     Ryaw = mu.rz(yaw)
     Rp = mu.rx(-pitch)
     sole = toe_c[:, None, :] + np.einsum("fij,fjk,pk->fpi", Ryaw, Rp, offs)
+    # en envol, une sole inclinée talon en bas (pas qui part d'une pose FK pince relevée) ne doit pas viser
+    # sous le sol : la cible entière est remontée du dépassement
+    low = sole[..., 2].min(axis=1)
+    fix = (~planted) & (low < 0.0)
+    sole[fix, :, 2] -= low[fix, None]
     return dict(sole=sole, planted=planted, w_rot=w_rot, carpus=carpus, coffin=coffin, fet=fet, free_rot=free_rot)
 
 
@@ -422,6 +484,9 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
     limb_pts = {l: np.isin(names_u, LIMB_JOINTS[l]) for l in LIMBS}
     dz = np.zeros(F)
     errs = {l: np.zeros(F) for l in LIMBS}
+    gfree = {l: np.zeros(F, dtype=bool) for l in LIMBS}
+    for l, a, b in ch.ground_free:
+        gfree[l] |= (times >= a - 1e-9) & (times <= b + 1e-9)
     n_iter = 4
     for it in range(n_iter):
         trans[:, bj, 2] = tb[:, 2] + dz
@@ -466,12 +531,12 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
             # un membre en fondu IK↔FK ou en train de faire un pas (IK, non planté) ne soulève pas le tronc :
             # sa propre IK a une pénalité de sol
             blending = ((w_ik[l] >= 1e-3) & (w_ik[l] <= 0.999)) | ((w_ik[l] > 0.999) & ~targets[l]["planted"])
-            Pz[np.ix_(blending, limb_pts[l])] = np.inf
+            Pz[np.ix_(blending | gfree[l], limb_pts[l])] = np.inf
         zmin = Pz.min(axis=1)
         for l in LIMBS:
             # seuls les membres entièrement en FK (ou non plantés) contraignent la hauteur du tronc ; un membre
             # en cours de fondu IK↔FK n'impose rien (sinon le tronc serait hissé pendant la transition)
-            free = w_ik[l] < 1e-3
+            free = (w_ik[l] < 1e-3) & ~gfree[l]
             sole = sk.sole_world(W, l)[..., 2].min(axis=1)
             zmin = np.where(free, np.minimum(zmin, sole), zmin)
         zt = zmin - 0.002                                      # marge de 2 mm
@@ -482,8 +547,11 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
     trans[:, bj, 2] = tb[:, 2] + dz
     head_corr = np.zeros(F)
     if ch.ground_fix:
-        ang = lift_blending_limbs(sk, ang, trans, w_ik, {l: targets[l]["planted"] for l in LIMBS})
+        ang = lift_blending_limbs(sk, ang, trans, w_ik, {l: targets[l]["planted"] for l in LIMBS},
+                                  extra={l: gfree[l] & (w_ik[l] < 1e-3) for l in LIMBS})
         ang, head_corr = lift_head(sk, ang, trans, js, ps)
+    if ch.tail_hang > 0.0:
+        ang = hang_tail(sk, ang, trans, ch.tail_hang)
     if ch.drape_tail:
         ang = drape_tail(sk, ang, trans)
     W = sk.fk(sk.basis_from_angles(ang, trans))

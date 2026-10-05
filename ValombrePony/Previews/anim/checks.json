@@ -1,0 +1,1697 @@
+{
+ "clips": {
+  "idle": {
+   "name": "idle",
+   "frames": 180,
+   "duration": 6.0,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 6.0,
+   "hoof_min_z_mm": -3.094157805666464e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 2.9293757855921935e-08,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 245.76426891070048,
+   "distal_min_z_mm": 36.027604450854135,
+   "lowest_point": {
+    "bone": "front_pastern_r",
+    "frame": 42,
+    "z_mm": 36.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 30.8,
+    "front_r": 39.9,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": -2.0,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    -3.0,
+    -1.0
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 0.628,
+    "pos_mm": 3.98
+   },
+   "loop_other_step_max": {
+    "rot_deg": 3.038,
+    "pos_mm": 15.91
+   },
+   "loop_seam_acc_mm": 0.22,
+   "loop_acc_max_other_mm": 2.25,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 10.5,
+   "npz": "Pipeline/build/clips/idle.npz",
+   "npz_bytes": 418391,
+   "blocking": []
+  },
+  "walk": {
+   "name": "walk",
+   "frames": 32,
+   "duration": 1.066667,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.05,
+   "hoof_min_z_mm": -0.0002570923031131045,
+   "slip_mm_per_frame": {
+    "fl": 0.021,
+    "fr": 0.021,
+    "hl": 0.016,
+    "hr": 0.016
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.021051755752051555,
+   "hoof_gap_min_m": 0.5538,
+   "body_min_z_mm": 203.51785030554214,
+   "distal_min_z_mm": 35.4041908509601,
+   "lowest_point": {
+    "bone": "front_pastern_r",
+    "frame": 27,
+    "z_mm": 35.4
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 41.7,
+    "hind_l": 33.7,
+    "front_r": 41.7,
+    "hind_r": 33.7
+   },
+   "carpus_flex_max_deg": {
+    "l": 58.0,
+    "r": 58.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.8,
+    "r": 0.8
+   },
+   "ao_flex_range_deg": [
+    -1.3,
+    1.3
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 8.983,
+    "pos_mm": 122.56
+   },
+   "loop_other_step_max": {
+    "rot_deg": 21.911,
+    "pos_mm": 134.77
+   },
+   "loop_seam_acc_mm": 52.63,
+   "loop_acc_max_other_mm": 68.53,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 10.9,
+   "npz": "Pipeline/build/clips/walk.npz",
+   "npz_bytes": 90161,
+   "blocking": []
+  },
+  "trot": {
+   "name": "trot",
+   "frames": 20,
+   "duration": 0.666667,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 0.66,
+   "hoof_min_z_mm": -0.0001746761364232463,
+   "slip_mm_per_frame": {
+    "fl": 0.029,
+    "fr": 0.029,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.029001124917122003,
+   "hoof_gap_min_m": 0.2135,
+   "body_min_z_mm": 235.3772212687681,
+   "distal_min_z_mm": 34.94167052950151,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 13,
+    "z_mm": 34.9
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 49.1,
+    "hind_l": 40.7,
+    "front_r": 49.1,
+    "hind_r": 40.7
+   },
+   "carpus_flex_max_deg": {
+    "l": 78.0,
+    "r": 78.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.54,
+    "r": 0.54
+   },
+   "ao_flex_range_deg": [
+    -0.9,
+    1.0
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 21.581,
+    "pos_mm": 85.93
+   },
+   "loop_other_step_max": {
+    "rot_deg": 30.579,
+    "pos_mm": 139.9
+   },
+   "loop_seam_acc_mm": 136.72,
+   "loop_acc_max_other_mm": 136.71,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 10.3,
+   "npz": "Pipeline/build/clips/trot.npz",
+   "npz_bytes": 53265,
+   "blocking": []
+  },
+  "canter_left": {
+   "name": "canter_left",
+   "frames": 17,
+   "duration": 0.566667,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 0.57,
+   "hoof_min_z_mm": -0.00021371540545600531,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.001,
+    "hl": 0.029,
+    "hr": 0.038
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.03806678197911688,
+   "hoof_gap_min_m": 0.4764,
+   "body_min_z_mm": 248.33000306924058,
+   "distal_min_z_mm": 33.53864936573613,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 6,
+    "z_mm": 33.5
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 59.2,
+    "hind_l": 46.0,
+    "front_r": 55.3,
+    "hind_r": 46.1
+   },
+   "carpus_flex_max_deg": {
+    "l": 85.0,
+    "r": 83.5
+   },
+   "recip_dev_max_deg": {
+    "l": 0.43,
+    "r": 2.67
+   },
+   "ao_flex_range_deg": [
+    -1.0,
+    1.0
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 26.975,
+    "pos_mm": 158.78
+   },
+   "loop_other_step_max": {
+    "rot_deg": 41.999,
+    "pos_mm": 170.81
+   },
+   "loop_seam_acc_mm": 120.65,
+   "loop_acc_max_other_mm": 114.81,
+   "warnings": [],
+   "weights": {
+    "body_breathe": [
+     0.251,
+     0.849
+    ],
+    "face_nostril_flare": [
+     0.351,
+     0.799
+    ]
+   },
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 7.8,
+   "npz": "Pipeline/build/clips/canter_left.npz",
+   "npz_bytes": 46561,
+   "blocking": []
+  },
+  "canter_right": {
+   "name": "canter_right",
+   "frames": 17,
+   "duration": 0.566667,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 0.57,
+   "hoof_min_z_mm": -0.0002336812280276379,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.015,
+    "hr": 0.024
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.024074052298547574,
+   "hoof_gap_min_m": 0.4612,
+   "body_min_z_mm": 246.2511288066115,
+   "distal_min_z_mm": 33.608050699441144,
+   "lowest_point": {
+    "bone": "front_pastern_r",
+    "frame": 10,
+    "z_mm": 33.6
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 54.6,
+    "hind_l": 45.8,
+    "front_r": 59.2,
+    "hind_r": 45.7
+   },
+   "carpus_flex_max_deg": {
+    "l": 83.2,
+    "r": 85.0
+   },
+   "recip_dev_max_deg": {
+    "l": 2.66,
+    "r": 0.42
+   },
+   "ao_flex_range_deg": [
+    -2.4,
+    2.4
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 30.433,
+    "pos_mm": 128.12
+   },
+   "loop_other_step_max": {
+    "rot_deg": 42.544,
+    "pos_mm": 170.88
+   },
+   "loop_seam_acc_mm": 112.13,
+   "loop_acc_max_other_mm": 113.07,
+   "warnings": [],
+   "weights": {
+    "body_breathe": [
+     0.252,
+     0.849
+    ],
+    "face_nostril_flare": [
+     0.352,
+     0.8
+    ]
+   },
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 7.9,
+   "npz": "Pipeline/build/clips/canter_right.npz",
+   "npz_bytes": 46513,
+   "blocking": []
+  },
+  "gallop": {
+   "name": "gallop",
+   "frames": 14,
+   "duration": 0.466667,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999992,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 0.46,
+   "hoof_min_z_mm": -0.00017287911357327657,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.035
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.0345257967714616,
+   "hoof_gap_min_m": 0.2214,
+   "body_min_z_mm": 297.72895749309157,
+   "distal_min_z_mm": 33.45941282904249,
+   "lowest_point": {
+    "bone": "front_pastern_r",
+    "frame": 5,
+    "z_mm": 33.5
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 59.8,
+    "hind_l": 48.6,
+    "front_r": 59.8,
+    "hind_r": 50.9
+   },
+   "carpus_flex_max_deg": {
+    "l": 99.6,
+    "r": 99.9
+   },
+   "recip_dev_max_deg": {
+    "l": 0.46,
+    "r": 2.27
+   },
+   "ao_flex_range_deg": [
+    -2.5,
+    3.1
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 40.305,
+    "pos_mm": 269.29
+   },
+   "loop_other_step_max": {
+    "rot_deg": 63.65,
+    "pos_mm": 279.33
+   },
+   "loop_seam_acc_mm": 144.7,
+   "loop_acc_max_other_mm": 211.83,
+   "warnings": [],
+   "weights": {
+    "body_breathe": [
+     0.255,
+     0.845
+    ],
+    "face_nostril_flare": [
+     0.354,
+     0.796
+    ]
+   },
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 7.5,
+   "npz": "Pipeline/build/clips/gallop.npz",
+   "npz_bytes": 39819,
+   "blocking": []
+  },
+  "back": {
+   "name": "back",
+   "frames": 36,
+   "duration": 1.2,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.2,
+   "hoof_min_z_mm": -0.00022736038399889802,
+   "slip_mm_per_frame": {
+    "fl": 0.02,
+    "fr": 0.02,
+    "hl": 0.025,
+    "hr": 0.025
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.025058963073727625,
+   "hoof_gap_min_m": 0.3381,
+   "body_min_z_mm": 177.72290429860894,
+   "distal_min_z_mm": 35.46941287233618,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 20,
+    "z_mm": 35.5
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 40.7,
+    "hind_l": 31.7,
+    "front_r": 40.7,
+    "hind_r": 31.7
+   },
+   "carpus_flex_max_deg": {
+    "l": 45.0,
+    "r": 45.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.81,
+    "r": 0.81
+   },
+   "ao_flex_range_deg": [
+    -0.2,
+    1.2
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 2.449,
+    "pos_mm": 20.12
+   },
+   "loop_other_step_max": {
+    "rot_deg": 13.159,
+    "pos_mm": 90.62
+   },
+   "loop_seam_acc_mm": 25.42,
+   "loop_acc_max_other_mm": 38.73,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 8.3,
+   "npz": "Pipeline/build/clips/back.npz",
+   "npz_bytes": 89918,
+   "blocking": []
+  },
+  "turn_left": {
+   "name": "turn_left",
+   "frames": 42,
+   "duration": 1.4,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.4,
+   "hoof_min_z_mm": -0.003933811967567202,
+   "slip_mm_per_frame": {
+    "fl": 0.015,
+    "fr": 0.128,
+    "hl": 0.003,
+    "hr": 0.003
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.12768890514066544,
+   "hoof_gap_min_m": 0.1164,
+   "body_min_z_mm": 175.15540047363606,
+   "distal_min_z_mm": 35.611498950746345,
+   "lowest_point": {
+    "bone": "front_pastern_r",
+    "frame": 13,
+    "z_mm": 35.6
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 40.1,
+    "hind_l": 30.8,
+    "front_r": 47.0,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 52.1,
+    "r": 52.1
+   },
+   "recip_dev_max_deg": {
+    "l": 0.08,
+    "r": 0.1
+   },
+   "ao_flex_range_deg": [
+    -1.0,
+    0.3
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 12.928,
+    "pos_mm": 87.24
+   },
+   "loop_other_step_max": {
+    "rot_deg": 41.117,
+    "pos_mm": 142.64
+   },
+   "loop_seam_acc_mm": 120.46,
+   "loop_acc_max_other_mm": 137.22,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.128,
+   "gen_time_s": 22.7,
+   "npz": "Pipeline/build/clips/turn_left.npz",
+   "npz_bytes": 109018,
+   "blocking": []
+  },
+  "turn_right": {
+   "name": "turn_right",
+   "frames": 42,
+   "duration": 1.4,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.4,
+   "hoof_min_z_mm": -0.003933815206726143,
+   "slip_mm_per_frame": {
+    "fl": 0.128,
+    "fr": 0.015,
+    "hl": 0.003,
+    "hr": 0.003
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.12768890673374936,
+   "hoof_gap_min_m": 0.1164,
+   "body_min_z_mm": 174.59005019834598,
+   "distal_min_z_mm": 35.61149198242314,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 6,
+    "z_mm": 35.6
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 47.0,
+    "hind_l": 30.8,
+    "front_r": 40.1,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 52.1,
+    "r": 52.1
+   },
+   "recip_dev_max_deg": {
+    "l": 0.1,
+    "r": 0.08
+   },
+   "ao_flex_range_deg": [
+    -1.0,
+    0.3
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 12.472,
+    "pos_mm": 99.68
+   },
+   "loop_other_step_max": {
+    "rot_deg": 41.117,
+    "pos_mm": 142.64
+   },
+   "loop_seam_acc_mm": 137.22,
+   "loop_acc_max_other_mm": 137.22,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.128,
+   "gen_time_s": 22.0,
+   "npz": "Pipeline/build/clips/turn_right.npz",
+   "npz_bytes": 109188,
+   "blocking": []
+  },
+  "idle_rest_hind": {
+   "name": "idle_rest_hind",
+   "frames": 180,
+   "duration": 6.0,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 6.0,
+   "hoof_min_z_mm": -6.094846145832111e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 4.004394748640204e-08,
+   "hoof_gap_min_m": 0.2078,
+   "body_min_z_mm": 248.29210482402976,
+   "distal_min_z_mm": 35.9954808222394,
+   "lowest_point": {
+    "bone": "front_pastern_r",
+    "frame": 44,
+    "z_mm": 36.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 5.3,
+    "front_r": 39.9,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": -2.0,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.03,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    -7.1,
+    -5.0
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 0.093,
+    "pos_mm": 0.87
+   },
+   "loop_other_step_max": {
+    "rot_deg": 0.228,
+    "pos_mm": 1.15
+   },
+   "loop_seam_acc_mm": 0.06,
+   "loop_acc_max_other_mm": 0.08,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 8.0,
+   "npz": "Pipeline/build/clips/idle_rest_hind.npz",
+   "npz_bytes": 397968,
+   "blocking": []
+  },
+  "graze_down": {
+   "name": "graze_down",
+   "frames": 46,
+   "duration": 1.5,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.5,
+   "hoof_min_z_mm": -1.3539798865425112e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 4.0620965982595464e-08,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 15.01540970915971,
+   "distal_min_z_mm": 34.111056990588764,
+   "lowest_point": {
+    "bone": "head",
+    "frame": 45,
+    "z_mm": 15.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 30.8,
+    "front_r": 39.9,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 34.9,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    -0.0,
+    52.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 1.9,
+   "npz": "Pipeline/build/clips/graze_down.npz",
+   "npz_bytes": 76423,
+   "blocking": []
+  },
+  "graze_loop": {
+   "name": "graze_loop",
+   "frames": 150,
+   "duration": 5.0,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 5.0,
+   "hoof_min_z_mm": -2.6174007433654722e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 1.715531869426272e-08,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 10.308054650725929,
+   "distal_min_z_mm": 34.10357889467944,
+   "lowest_point": {
+    "bone": "head",
+    "frame": 21,
+    "z_mm": 10.3
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.6,
+    "hind_l": 30.8,
+    "front_r": 39.8,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": -2.0,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    45.6,
+    59.3
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 0.748,
+    "pos_mm": 4.19
+   },
+   "loop_other_step_max": {
+    "rot_deg": 6.352,
+    "pos_mm": 33.71
+   },
+   "loop_seam_acc_mm": 1.48,
+   "loop_acc_max_other_mm": 8.13,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 6.6,
+   "npz": "Pipeline/build/clips/graze_loop.npz",
+   "npz_bytes": 352810,
+   "blocking": []
+  },
+  "graze_up": {
+   "name": "graze_up",
+   "frames": 37,
+   "duration": 1.2,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.2,
+   "hoof_min_z_mm": -1.3539800114426015e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 2.932938545886864e-08,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 15.015409709159599,
+   "distal_min_z_mm": 34.11105699165203,
+   "lowest_point": {
+    "bone": "head",
+    "frame": 0,
+    "z_mm": 15.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 30.8,
+    "front_r": 39.9,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 34.9,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    -0.0,
+    52.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 2.3,
+   "npz": "Pipeline/build/clips/graze_up.npz",
+   "npz_bytes": 62508,
+   "blocking": []
+  },
+  "head_shake": {
+   "name": "head_shake",
+   "frames": 37,
+   "duration": 1.2,
+   "loop": false,
+   "rot_orthonormal_err": 2.220446049250313e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.2,
+   "hoof_min_z_mm": -4.796706781773352e-07,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 1.6711069443220838e-13,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 258.7709377239896,
+   "distal_min_z_mm": 36.18098308295717,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 0,
+    "z_mm": 36.2
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 30.8,
+    "front_r": 39.9,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": -2.0,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    -4.0,
+    -0.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 0.3,
+   "npz": "Pipeline/build/clips/head_shake.npz",
+   "npz_bytes": 45618,
+   "blocking": []
+  },
+  "neigh": {
+   "name": "neigh",
+   "frames": 67,
+   "duration": 2.2,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 2.2,
+   "hoof_min_z_mm": -4.796706781773352e-07,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 1.6711069443220838e-13,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 258.7709377239896,
+   "distal_min_z_mm": 36.18098308295717,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 0,
+    "z_mm": 36.2
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 30.8,
+    "front_r": 39.9,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": -2.0,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    -0.0,
+    6.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {
+    "body_breathe": [
+     0.159,
+     0.95
+    ],
+    "face_mouth_open_soft": [
+     0.0,
+     0.75
+    ],
+    "face_nostril_flare": [
+     0.0,
+     1.0
+    ]
+   },
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 0.6,
+   "npz": "Pipeline/build/clips/neigh.npz",
+   "npz_bytes": 52888,
+   "blocking": []
+  },
+  "paw": {
+   "name": "paw",
+   "frames": 48,
+   "duration": 1.6,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.6,
+   "hoof_min_z_mm": -3.202810407165746e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 1.0372181665070638e-08,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 241.8544662613233,
+   "distal_min_z_mm": 35.97142424487176,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 0,
+    "z_mm": 36.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.8,
+    "hind_l": 30.8,
+    "front_r": 38.3,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": -2.0,
+    "r": 78.9
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    6.0,
+    7.0
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 7.86,
+    "pos_mm": 41.68
+   },
+   "loop_other_step_max": {
+    "rot_deg": 15.869,
+    "pos_mm": 65.42
+   },
+   "loop_seam_acc_mm": 20.7,
+   "loop_acc_max_other_mm": 32.49,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 6.2,
+   "npz": "Pipeline/build/clips/paw.npz",
+   "npz_bytes": 92910,
+   "blocking": []
+  },
+  "rear": {
+   "name": "rear",
+   "frames": 79,
+   "duration": 2.6,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 4.440892098500626e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 2.6,
+   "hoof_min_z_mm": -2.1469118163808254e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 3.1726020059526434e-06,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 39.15878757870131,
+   "distal_min_z_mm": 35.18761410660848,
+   "lowest_point": {
+    "bone": "hind_pastern_l",
+    "frame": 38,
+    "z_mm": 35.2
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 38.6,
+    "front_r": 47.3,
+    "hind_r": 38.6
+   },
+   "carpus_flex_max_deg": {
+    "l": 125.0,
+    "r": 124.9
+   },
+   "recip_dev_max_deg": {
+    "l": 0.03,
+    "r": 0.03
+   },
+   "ao_flex_range_deg": [
+    -12.0,
+    4.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 39.942,
+   "gen_time_s": 6.6,
+   "npz": "Pipeline/build/clips/rear.npz",
+   "npz_bytes": 163000,
+   "blocking": []
+  },
+  "lie_down": {
+   "name": "lie_down",
+   "frames": 91,
+   "duration": 3.0,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 3.0,
+   "hoof_min_z_mm": -0.0004905088566778404,
+   "slip_mm_per_frame": {
+    "fl": 0.001,
+    "fr": 0.238,
+    "hl": 0.0,
+    "hr": 0.08
+   },
+   "stance_toe_z_max_mm": 0.19,
+   "slip_max_mm": 0.2382049930964686,
+   "hoof_gap_min_m": 0.2048,
+   "body_min_z_mm": 2.0002440223047535,
+   "distal_min_z_mm": 1.999999999999738,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 83,
+    "z_mm": 2.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 45.7,
+    "hind_l": 40.8,
+    "front_r": 44.7,
+    "hind_r": 40.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 150.0,
+    "r": 148.0
+   },
+   "recip_dev_max_deg": {
+    "l": 12.0,
+    "r": 12.0
+   },
+   "ao_flex_range_deg": [
+    -6.0,
+    22.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 27.7,
+   "npz": "Pipeline/build/clips/lie_down.npz",
+   "npz_bytes": 178470,
+   "blocking": []
+  },
+  "lying": {
+   "name": "lying",
+   "frames": 180,
+   "duration": 6.0,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999992,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 6.0,
+   "hoof_min_z_mm": 2.885922306950242,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.0,
+   "hoof_gap_min_m": 9.9,
+   "body_min_z_mm": 22.58998772773014,
+   "distal_min_z_mm": 1.9999999999997935,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 164,
+    "z_mm": 2.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": -20.1,
+    "hind_l": 40.8,
+    "front_r": -20.1,
+    "hind_r": 40.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 150.0,
+    "r": 148.0
+   },
+   "recip_dev_max_deg": {
+    "l": 12.0,
+    "r": 12.0
+   },
+   "ao_flex_range_deg": [
+    -10.0,
+    -4.0
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 0.433,
+    "pos_mm": 1.31
+   },
+   "loop_other_step_max": {
+    "rot_deg": 3.372,
+    "pos_mm": 10.23
+   },
+   "loop_seam_acc_mm": 0.17,
+   "loop_acc_max_other_mm": 1.78,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 0.5,
+   "npz": "Pipeline/build/clips/lying.npz",
+   "npz_bytes": 158020,
+   "blocking": []
+  },
+  "get_up": {
+   "name": "get_up",
+   "frames": 76,
+   "duration": 2.5,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 2.5,
+   "hoof_min_z_mm": -5.159072291566251,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 1.2334414973955957e-06,
+   "hoof_gap_min_m": 0.2189,
+   "body_min_z_mm": 24.061508680606018,
+   "distal_min_z_mm": 1.9999999999999394,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 1,
+    "z_mm": 2.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 59.8,
+    "front_r": 59.8,
+    "hind_r": 59.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 150.0,
+    "r": 148.0
+   },
+   "recip_dev_max_deg": {
+    "l": 12.0,
+    "r": 12.0
+   },
+   "ao_flex_range_deg": [
+    -6.0,
+    -0.0
+   ],
+   "limit_violations": [],
+   "warnings": [
+    "pénétration sabot -5.2 mm"
+   ],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 23.7,
+   "npz": "Pipeline/build/clips/get_up.npz",
+   "npz_bytes": 155654,
+   "blocking": [
+    "pénétration sabot"
+   ]
+  },
+  "roll": {
+   "name": "roll",
+   "frames": 136,
+   "duration": 4.5,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999989,
+   "quat_norm_err": 3.3306690738754696e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 4.5,
+   "hoof_min_z_mm": 1.9999999999997555,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.0,
+   "hoof_gap_min_m": 9.9,
+   "body_min_z_mm": 1.9999999999999463,
+   "distal_min_z_mm": 1.9999999999998561,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 126,
+    "z_mm": 2.0
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 15.9,
+    "hind_l": 40.8,
+    "front_r": 15.9,
+    "hind_r": 40.8
+   },
+   "carpus_flex_max_deg": {
+    "l": 150.0,
+    "r": 148.0
+   },
+   "recip_dev_max_deg": {
+    "l": 12.0,
+    "r": 12.0
+   },
+   "ao_flex_range_deg": [
+    -12.0,
+    -6.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 0.8,
+   "npz": "Pipeline/build/clips/roll.npz",
+   "npz_bytes": 184507,
+   "blocking": []
+  },
+  "body_shake": {
+   "name": "body_shake",
+   "frames": 46,
+   "duration": 1.5,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 1.5,
+   "hoof_min_z_mm": -5.9089975121273675e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 1.8048619220282407e-06,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 235.6558288068854,
+   "distal_min_z_mm": 35.86205060624381,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 13,
+    "z_mm": 35.9
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.9,
+    "hind_l": 30.8,
+    "front_r": 39.9,
+    "hind_r": 30.8
+   },
+   "carpus_flex_max_deg": {
+    "l": -2.0,
+    "r": -2.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.01,
+    "r": 0.01
+   },
+   "ao_flex_range_deg": [
+    -4.0,
+    -0.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 4.6,
+   "npz": "Pipeline/build/clips/body_shake.npz",
+   "npz_bytes": 110785,
+   "blocking": []
+  },
+  "jump_takeoff": {
+   "name": "jump_takeoff",
+   "frames": 16,
+   "duration": 0.5,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 0.5,
+   "hoof_min_z_mm": -1.5043013057436383e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.051,
+    "hr": 0.033
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.05100868296728748,
+   "hoof_gap_min_m": 0.22,
+   "body_min_z_mm": 235.9331182304443,
+   "distal_min_z_mm": 33.276145336672876,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 2,
+    "z_mm": 33.3
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 39.6,
+    "hind_l": 57.9,
+    "front_r": 39.8,
+    "hind_r": 30.7
+   },
+   "carpus_flex_max_deg": {
+    "l": 140.0,
+    "r": 140.0
+   },
+   "recip_dev_max_deg": {
+    "l": 8.0,
+    "r": 7.72
+   },
+   "ao_flex_range_deg": [
+    -5.9,
+    5.9
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 192.654,
+   "gen_time_s": 9.0,
+   "npz": "Pipeline/build/clips/jump_takeoff.npz",
+   "npz_bytes": 34350,
+   "blocking": []
+  },
+  "jump_air": {
+   "name": "jump_air",
+   "frames": 12,
+   "duration": 0.4,
+   "loop": true,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999993,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 0.4,
+   "hoof_min_z_mm": 303.2990023388868,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 0.0,
+   "slip_max_mm": 0.0,
+   "hoof_gap_min_m": 9.9,
+   "body_min_z_mm": 331.2107880993456,
+   "distal_min_z_mm": 368.1816678921363,
+   "lowest_point": {
+    "bone": "tail_10",
+    "frame": 0,
+    "z_mm": 331.2
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": -15.1,
+    "hind_l": -13.2,
+    "front_r": -15.1,
+    "hind_r": -13.2
+   },
+   "carpus_flex_max_deg": {
+    "l": 140.0,
+    "r": 140.0
+   },
+   "recip_dev_max_deg": {
+    "l": 0.0,
+    "r": 0.0
+   },
+   "ao_flex_range_deg": [
+    8.0,
+    9.0
+   ],
+   "limit_violations": [],
+   "loop_seam_step": {
+    "rot_deg": 0.496,
+    "pos_mm": 5.09
+   },
+   "loop_other_step_max": {
+    "rot_deg": 1.612,
+    "pos_mm": 16.53
+   },
+   "loop_seam_acc_mm": 10.17,
+   "loop_acc_max_other_mm": 10.17,
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 0.0,
+   "gen_time_s": 0.0,
+   "npz": "Pipeline/build/clips/jump_air.npz",
+   "npz_bytes": 18373,
+   "blocking": []
+  },
+  "jump_land": {
+   "name": "jump_land",
+   "frames": 19,
+   "duration": 0.6,
+   "loop": false,
+   "rot_orthonormal_err": 1.9984014443252818e-15,
+   "rot_det_min": 0.9999999999999991,
+   "quat_norm_err": 2.220446049250313e-16,
+   "root_identity_err": 0.0,
+   "duration_ok": true,
+   "duration_target": 0.6,
+   "hoof_min_z_mm": -1.3968748144299603e-05,
+   "slip_mm_per_frame": {
+    "fl": 0.0,
+    "fr": 0.0,
+    "hl": 0.0,
+    "hr": 0.0
+   },
+   "stance_toe_z_max_mm": 4.38,
+   "slip_max_mm": 1.0852951580354723e-06,
+   "hoof_gap_min_m": 0.2254,
+   "body_min_z_mm": 269.1291284673372,
+   "distal_min_z_mm": 33.811380670137645,
+   "lowest_point": {
+    "bone": "front_pastern_l",
+    "frame": 3,
+    "z_mm": 33.8
+   },
+   "fetlock_hyper_max_deg": {
+    "front_l": 40.1,
+    "hind_l": 31.2,
+    "front_r": 40.0,
+    "hind_r": 39.3
+   },
+   "carpus_flex_max_deg": {
+    "l": 68.4,
+    "r": 69.1
+   },
+   "recip_dev_max_deg": {
+    "l": 8.0,
+    "r": 8.0
+   },
+   "ao_flex_range_deg": [
+    -5.9,
+    4.0
+   ],
+   "limit_violations": [],
+   "warnings": [],
+   "weights": {},
+   "ik_err_max_mm": 4.727,
+   "gen_time_s": 8.1,
+   "npz": "Pipeline/build/clips/jump_land.npz",
+   "npz_bytes": 44453,
+   "blocking": []
+  }
+ },
+ "chains": {
+  "idle->graze_down": {
+   "rot_deg_max": 4.0,
+   "rot_joint": "eye_r",
+   "pos_mm_max": 31.3,
+   "pos_joint": "lip_upper"
+  },
+  "graze_down->graze_loop": {
+   "rot_deg_max": 0.0,
+   "rot_joint": "tail_08",
+   "pos_mm_max": 0.0,
+   "pos_joint": "forearm_r"
+  },
+  "graze_loop->graze_up": {
+   "rot_deg_max": 0.0,
+   "rot_joint": "tail_08",
+   "pos_mm_max": 0.0,
+   "pos_joint": "forearm_r"
+  },
+  "graze_up->idle": {
+   "rot_deg_max": 4.0,
+   "rot_joint": "eye_r",
+   "pos_mm_max": 31.3,
+   "pos_joint": "lip_upper"
+  },
+  "idle->lie_down": {
+   "rot_deg_max": 4.0,
+   "rot_joint": "eye_r",
+   "pos_mm_max": 31.3,
+   "pos_joint": "lip_upper"
+  },
+  "lie_down->lying": {
+   "rot_deg_max": 0.0,
+   "rot_joint": "tail_03",
+   "pos_mm_max": 0.0,
+   "pos_joint": "hind_cannon_l"
+  },
+  "lying->get_up": {
+   "rot_deg_max": 0.0,
+   "rot_joint": "tail_03",
+   "pos_mm_max": 0.0,
+   "pos_joint": "lip_lower"
+  },
+  "get_up->idle": {
+   "rot_deg_max": 4.0,
+   "rot_joint": "eye_r",
+   "pos_mm_max": 31.3,
+   "pos_joint": "lip_upper"
+  },
+  "lying->roll": {
+   "rot_deg_max": 0.0,
+   "rot_joint": "tail_03",
+   "pos_mm_max": 0.0,
+   "pos_joint": "root"
+  },
+  "roll->lying": {
+   "rot_deg_max": 0.0,
+   "rot_joint": "tail_03",
+   "pos_mm_max": 0.0,
+   "pos_joint": "hind_hoof_l"
+  },
+  "idle->rear": {
+   "rot_deg_max": 9.22,
+   "rot_joint": "hind_pastern_l",
+   "pos_mm_max": 60.0,
+   "pos_joint": "hind_hoof_l"
+  },
+  "rear->idle": {
+   "rot_deg_max": 9.22,
+   "rot_joint": "hind_pastern_l",
+   "pos_mm_max": 60.0,
+   "pos_joint": "hind_hoof_l"
+  },
+  "idle->body_shake": {
+   "rot_deg_max": 4.0,
+   "rot_joint": "eye_r",
+   "pos_mm_max": 31.3,
+   "pos_joint": "lip_upper"
+  },
+  "body_shake->idle": {
+   "rot_deg_max": 4.0,
+   "rot_joint": "eye_r",
+   "pos_mm_max": 31.3,
+   "pos_joint": "lip_upper"
+  },
+  "idle->paw": {
+   "rot_deg_max": 22.58,
+   "rot_joint": "front_pastern_r",
+   "pos_mm_max": 123.2,
+   "pos_joint": "ear_tip_l"
+  },
+  "paw->idle": {
+   "rot_deg_max": 22.58,
+   "rot_joint": "front_pastern_r",
+   "pos_mm_max": 123.2,
+   "pos_joint": "ear_tip_l"
+  },
+  "jump_takeoff->jump_air": {
+   "rot_deg_max": 45.94,
+   "rot_joint": "hind_hoof_r",
+   "pos_mm_max": 929.8,
+   "pos_joint": "lip_upper"
+  },
+  "jump_air->jump_land": {
+   "rot_deg_max": 178.23,
+   "rot_joint": "front_pastern_l",
+   "pos_mm_max": 940.8,
+   "pos_joint": "front_hoof_r"
+  },
+  "jump_land->canter_left": {
+   "rot_deg_max": 69.58,
+   "rot_joint": "front_pastern_r",
+   "pos_mm_max": 530.1,
+   "pos_joint": "front_hoof_r"
+  },
+  "canter_left->jump_takeoff": {
+   "rot_deg_max": 64.53,
+   "rot_joint": "front_hoof_l",
+   "pos_mm_max": 424.6,
+   "pos_joint": "hind_hoof_r"
+  }
+ },
+ "thresholds": {
+  "slip_mm_per_frame": 2.0,
+  "hoof_penetration_mm": -5.0,
+  "body_penetration_mm": -5.0
+ },
+ "skeleton": {
+  "source": "rig.build_armature()",
+  "joints": 70,
+  "wh_estimate_m": 1.3001
+ },
+ "missing": [],
+ "generated_at": "2026-10-05 19:40:26"
+}

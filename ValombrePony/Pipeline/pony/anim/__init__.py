@@ -13,5 +13,6 @@ Modules :
 - `preview`    : planches contact et GIF (Blender, Workbench).
 
 Le code de génération est en numpy pur (aucune dépendance à bpy) : seul le squelette de repos est lu
-une fois depuis `rig.build_armature()` (cache `Pipeline/build/clips/_rest_skeleton.npz`).
+à chaque lancement depuis `rig.build_armature()` (aucune position d'os codée en dur), puis transmis aux processus
+de génération (`stages/s04_anim.py`).
 """

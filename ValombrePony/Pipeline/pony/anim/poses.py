@@ -39,7 +39,7 @@ class Step:
     limb: str
     t0: float
     t1: float
-    to: tuple                   # (dx, dy) de la pince / repos (repère du clip, à t1)
+    to: tuple | None            # (dx, dy) de la pince / repos (repère du clip, à t1) ; None = sur place
     lift: float = 0.07
     carpus: float = 50.0        # flexion du carpe en envol (°) [antérieurs]
     flip: float = 40.0          # rotation du sabot en envol (°, guide)
@@ -240,6 +240,35 @@ def lift_head(sk: Skeleton, ang, trans, js, ps, clearance=0.005):
     return ang, d
 
 
+def lift_blending_limbs(sk: Skeleton, ang, trans, w_ik, planted):
+    """Pendant un fondu IK↔FK, l'interpolation d'angles peut faire passer le sabot sous le sol : on ajoute
+    alors juste assez de flexion du carpe (antérieur) ou du grasset + jarret couplés (postérieur) pour que
+    la sole reste au-dessus du sol (recherche sur une grille, image par image)."""
+    for l in LIMBS:
+        blending = (w_ik[l] > 1e-3) & (w_ik[l] < 0.999)
+        frames = np.where(blending)[0]
+        if len(frames) == 0:
+            continue
+        W = sk.fk(sk.basis_from_angles(ang[frames], trans[frames]))
+        zmin = sk.sole_world(W, l)[..., 2].min(axis=1)
+        jn = f"front_cannon_{l[1]}" if l.startswith("f") else f"gaskin_{l[1]}"
+        j = sk.idx(jn)
+        hc = sk.idx(f"hind_cannon_{l[1]}")
+        for k, f in enumerate(frames):
+            if zmin[k] >= 0.0:
+                continue
+            for extra in np.deg2rad(np.arange(3, 91, 3)):
+                A = ang[f:f + 1].copy()
+                A[0, j, 0] -= extra
+                if l.startswith("h"):
+                    A[0, hc, 0] += extra
+                z = sk.sole_world(sk.fk(sk.basis_from_angles(A, trans[f:f + 1])), l)[0, :, 2].min()
+                if z >= 0.0:
+                    break
+            ang[f] = A[0]
+    return ang
+
+
 def _fk_weight(ch: Choreo, limb, times):
     """Poids IK (1) / FK (0) d'un membre : passage IK→FK sur [t0, t0+blend_in], FK→IK sur [t1, t1+blend_out]."""
     w = np.ones(len(times))
@@ -284,7 +313,10 @@ def hoof_targets(sk: Skeleton, ch: Choreo, limb, times, fk_start=None):
             a_toe, a_pitch, fk_c, fk_f = fk_start[(limb, st.t0)]
             a = np.array([a_toe[0], a_toe[1] + v * st.t0, max(a_toe[2], 0.0)])
             cur_pitch = a_pitch
-        b = np.array([toe0[0] + st.to[0], toe0[1] + st.to[1] + v * st.t1, 0.0])
+        if st.to is None:      # rester sur place (xy de départ), descendre au sol
+            b = np.array([a[0], a[1] + v * (st.t1 - st.t0), 0.0])
+        else:
+            b = np.array([toe0[0] + st.to[0], toe0[1] + st.to[1] + v * st.t1, 0.0])
         m = (times >= st.t0) & (times <= st.t1)
         after = times > st.t1
         s = np.clip((times[m] - st.t0) / (st.t1 - st.t0), 0, 1)
@@ -414,8 +446,8 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
                     fetlock_pref=float(tg["fet"][f] + ch.fetlock_pref.get(l, 0.0) * D),
                     coffin_pref=float(tg["coffin"][f]),
                     w_coffin=0.15 + 0.6 * (1.0 - float(tg["w_rot"][f])),
-                    ground_clear=0.004 if not tg["planted"][f] else (0.0 if tg["free_rot"][f] else -1.0),
-                    w_ground=60.0 if (not tg["planted"][f] or tg["free_rot"][f]) else 0.0)
+                    ground_clear=0.007 if not tg["planted"][f] else (0.0 if tg["free_rot"][f] else -1.0),
+                    w_ground=6000.0 if (not tg["planted"][f] or tg["free_rot"][f]) else 0.0)
                 x, chain, info = solvers[l].solve(W[f, solvers[l].parent], inp, x0=x_prev)
                 x_prev = x
                 sol[f] = chain
@@ -431,13 +463,15 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
         P = transform_points(W, js[use_pts], ps[use_pts])
         Pz = P[..., 2].copy()
         for l in LIMBS:
-            blending = (w_ik[l] >= 1e-3) & (w_ik[l] <= 0.999)
+            # un membre en fondu IK↔FK ou en train de faire un pas (IK, non planté) ne soulève pas le tronc :
+            # sa propre IK a une pénalité de sol
+            blending = ((w_ik[l] >= 1e-3) & (w_ik[l] <= 0.999)) | ((w_ik[l] > 0.999) & ~targets[l]["planted"])
             Pz[np.ix_(blending, limb_pts[l])] = np.inf
         zmin = Pz.min(axis=1)
         for l in LIMBS:
             # seuls les membres entièrement en FK (ou non plantés) contraignent la hauteur du tronc ; un membre
             # en cours de fondu IK↔FK n'impose rien (sinon le tronc serait hissé pendant la transition)
-            free = (w_ik[l] < 1e-3) | ((w_ik[l] > 0.999) & ~targets[l]["planted"])
+            free = w_ik[l] < 1e-3
             sole = sk.sole_world(W, l)[..., 2].min(axis=1)
             zmin = np.where(free, np.minimum(zmin, sole), zmin)
         zt = zmin - 0.002                                      # marge de 2 mm
@@ -448,6 +482,7 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
     trans[:, bj, 2] = tb[:, 2] + dz
     head_corr = np.zeros(F)
     if ch.ground_fix:
+        ang = lift_blending_limbs(sk, ang, trans, w_ik, {l: targets[l]["planted"] for l in LIMBS})
         ang, head_corr = lift_head(sk, ang, trans, js, ps)
     if ch.drape_tail:
         ang = drape_tail(sk, ang, trans)

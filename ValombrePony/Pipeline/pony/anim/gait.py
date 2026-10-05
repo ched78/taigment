@@ -704,7 +704,7 @@ def make_gait_clip(sk: Skeleton, spec: GaitSpec, verbose=False) -> Clip:
                 fetlock_pref=float(fet[f]), coffin_pref=float(coffin[f]), w_fetlock=lg.w_fetlock,
                 w_coffin=0.15 + 0.6 * (1.0 - float(tr.w_rot[f])),
                 ground_clear=0.004 if not tr.stance[f] else -1.0,
-                w_ground=60.0 if not tr.stance[f] else 0.0)
+                w_ground=6000.0 if not tr.stance[f] else 0.0)
             x, chain, info = solver.solve(W[f, solver.parent], inp, x0=x_prev)
             x_prev = x
             if n_it >= F:

@@ -98,8 +98,8 @@ def interp_profile(ctrl, t):
 # ----------------------------------------------------------------------------------------------
 # Crinière naturelle
 # ----------------------------------------------------------------------------------------------
-MANE_LENGTH = [(0.0, 0.04), (0.03, 0.10), (0.07, 0.17), (0.15, 0.25), (0.35, 0.32), (0.65, 0.30), (0.88, 0.23), (0.96, 0.17),
-               (1.0, 0.11)]   # [A]
+MANE_LENGTH = [(0.0, 0.05), (0.03, 0.14), (0.08, 0.25), (0.20, 0.34), (0.40, 0.39), (0.65, 0.38), (0.85, 0.31),
+               (0.95, 0.22), (1.0, 0.13)]   # longueur des mèches (m) le long de la crête (0 garrot → 1 nuque) [A]
 
 
 def end_taper(t, a=0.10, b=0.12):
@@ -112,8 +112,8 @@ def mane_natural(surf, J, crest, seed=11):
     b = PartBuilder("mane_natural")
     Lc = crest["length"]
 
-    # --- couche de base opaque (nappe continue le long de la crête) ---
-    C, NS = 54, 14
+    # --- couche de base opaque (nappe continue le long de la crête), longue et dense près de la crête ---
+    C, NS = 60, 14
     ts = np.linspace(0.004, 0.996, C)
     grid = np.zeros((NS + 1, C, 3))
     roots = np.zeros((C, 3))
@@ -122,9 +122,9 @@ def mane_natural(surf, J, crest, seed=11):
         e = end_taper(t)
         q = surf.nearest(p + r * (-0.012 * (0.3 + 0.7 * e)))[0]
         roots[c] = q
-        L = 0.70 * interp_profile(MANE_LENGTH, t)
-        d0 = _poll_bias(nrm(n * 0.75 * (0.15 + 0.85 * e) + r * 0.65 - tg * 0.10), t, n, r, tg)
-        grid[:, c] = grow_guide(surf, q, d0, L, NS, lambda s: 0.003 + 0.005 * s, bend=30.0)
+        L = 0.78 * interp_profile(MANE_LENGTH, t)
+        d0 = _poll_bias(nrm(n * 0.70 * (0.15 + 0.85 * e) + r * 0.70), t, n, r, tg)
+        grid[:, c] = grow_guide(surf, q, d0, L, NS, lambda s: 0.003 + 0.005 * s, bend=38.0)
     UVg = np.zeros((NS + 1, C, 2))
     u0, v0, u1, v1 = R_BASE
     uu = tri_wave(ts * Lc / 0.075)
@@ -136,14 +136,19 @@ def mane_natural(surf, J, crest, seed=11):
     FAC = np.array([[surf.nearest(grid[rr, c])[1] for c in range(C)] for rr in range(NS + 1)])
     b.add_grid(grid, UVg, Sg, roots, FAC, tag=0, aux=ts)
 
-    # --- cartes : couche interne puis externe, et quelques mèches qui tombent à gauche ---
+    # --- cartes : 3 couches qui se recouvrent (interne dense, intermédiaire, externe en mèches) ---
+    # Les crins tombent par gravité (taux de courbure élevé : chute verticale proche de la longueur) et suivent
+    # la courbure de l'encolure (collisions avec la peau). Écart racine-carte croissant d'une couche à l'autre.
     layers = [
-        dict(tag=1, n=66, width=(0.040, 0.052), xoff=(-0.010, 0.004), up=(0.75, 0.95), side=(0.50, 0.70),
-             off=lambda s: 0.008 + 0.012 * s, lenf=(0.78, 1.04), nseg=12, nacross=2, arch=0.0,
-             variants=["dense", "clumped", "short", "dense"], lift=0.006, sway=0.006),
-        dict(tag=2, n=62, width=(0.036, 0.048), xoff=(-0.010, 0.002), up=(0.50, 0.72), side=(0.62, 0.85),
-             off=lambda s: 0.012 + 0.016 * s, lenf=(0.70, 1.12), nseg=12, nacross=3, arch=0.2,
-             variants=["clumped", "wispy", "split", "pointed", "clumped"], lift=0.010, sway=0.012, bend=(30, 38)),
+        dict(tag=1, n=92, width=(0.040, 0.054), xoff=(-0.010, 0.004), up=(0.55, 0.75), side=(0.60, 0.80),
+             off=lambda s: 0.007 + 0.010 * s, lenf=(0.82, 1.02), nseg=12, nacross=2, arch=0.0,
+             variants=["dense", "clumped", "dense", "split"], lift=0.005, sway=0.006, bend=(38, 48)),
+        dict(tag=2, n=64, width=(0.038, 0.050), xoff=(-0.010, 0.003), up=(0.50, 0.70), side=(0.62, 0.85),
+             off=lambda s: 0.011 + 0.014 * s, lenf=(0.76, 1.08), nseg=12, nacross=2, arch=0.0,
+             variants=["clumped", "dense", "short", "split"], lift=0.008, sway=0.009, bend=(36, 46)),
+        dict(tag=3, n=80, width=(0.034, 0.046), xoff=(-0.010, 0.002), up=(0.45, 0.65), side=(0.65, 0.88),
+             off=lambda s: 0.015 + 0.018 * s, lenf=(0.70, 1.12), nseg=12, nacross=2, arch=0.0,
+             variants=["clumped", "wispy", "split", "pointed", "clumped"], lift=0.012, sway=0.013, bend=(34, 44)),
     ]
     for lay in layers:
         n = lay["n"]
@@ -155,7 +160,7 @@ def mane_natural(surf, J, crest, seed=11):
             q = surf.nearest(p + r * rng.uniform(*lay["xoff"]) * (0.3 + 0.7 * e))[0]
             L = interp_profile(MANE_LENGTH, t) * rng.uniform(*lay["lenf"])
             d0 = nrm(nn * rng.uniform(*lay["up"]) * (0.15 + 0.85 * e) + r * rng.uniform(*lay["side"])
-                     + tg * rng.uniform(-0.18, 0.08))
+                     + tg * rng.uniform(-0.10, 0.10))
             d0 = _poll_bias(d0, t, nn, r, tg)
             off = lay["off"]
             P = grow_guide(surf, q, d0, L, lay["nseg"], lambda s, off=off, e=e: off(s) * (0.45 + 0.55 * e),
@@ -584,7 +589,14 @@ def forelock_braided(surf, J, crest, seed=23):
 # ----------------------------------------------------------------------------------------------
 # Queue
 # ----------------------------------------------------------------------------------------------
-TAIL_RADIUS = [(0.0, 0.042), (0.10, 0.062), (0.30, 0.070), (0.60, 0.068), (0.85, 0.056), (1.0, 0.042)]  # [A]
+TAIL_RADIUS = [(0.0, 0.064), (0.10, 0.080), (0.30, 0.082), (0.60, 0.076), (0.85, 0.062), (1.0, 0.046)]  # [A]
+
+
+def dock_volume(base, slope, extra):
+    """Écart à la peau d'un guide de queue (s relatif au guide de 1,4 m) : `extra` gonfle le volume des crins
+    couchés sur le tronçon (montée sur les 5 premiers cm pour ne pas décoller la racine, retombée sous le
+    tronçon où le profil TAIL_RADIUS prend le relais)."""
+    return lambda s: base + slope * s + extra * smoothstep(0.0, 0.03, s) * (1.0 - smoothstep(0.18, 0.32, s))
 
 
 def _dock_frame(J, a):
@@ -641,40 +653,67 @@ def _tail_facing(J, P):
 
 def tail_guide(surf, J, a, phi, rfac, off_fn, rng, z_end, z_dock_end, dock_follow=True, rprof=TAIL_RADIUS,
                nout=16, start_gather=None):
+    """Guide d'une mèche de queue.
+    1) Sur le tronçon (de l'abscisse a de la racine jusqu'au bout du tronçon) : la mèche est couchée le long du
+       tronçon, à l'angle phi, à `off_fn(s)` au-dessus de la peau (crins peignés vers le bas, volume contrôlé).
+    2) Sous le tronçon : chute verticale le long de la chaîne tail_05…tail_10, sur une section elliptique de rayon
+       TAIL_RADIUS(f) · rfac (f = 0 bout du tronçon → 1 pointe), avec une légère dérive angulaire.
+    Renvoie (points (nout,3), racine) ou None si la racine n'est pas trouvée sur la peau du tronçon."""
     r = dock_root(surf, J, a, phi)
     if r is None:
         return None
-    q, n, t, radial = r
-    d0 = nrm(t * 1.0 + radial * 0.25)
-    P = grow_guide(surf, q, d0, 1.4, 56, off_fn, bend=rng.uniform(5, 9))
-    # mise en forme du volume sous le tronçon
-    psi = None
-    out = []
+    q, n0, t0, radial0 = r
+    pts = [q]
+    # --- partie couchée sur le tronçon ---
+    D, Ld = hs.dock_axis(J, 60)
+    a_steps = np.arange(a, 1.0, 0.025 / max(Ld, 1e-6))[1:]
+    a_steps = np.append(a_steps, 1.0)
+    arc = 0.0
+    prev = q
+    rad_prev = None
+    for ak in a_steps:
+        p_ax, t_ax, dor = _dock_frame(J, ak)
+        radial = nrm(dor * np.cos(phi) + np.array([1.0, 0, 0]) * np.sin(phi))
+        h = surf.ray(p_ax, radial, 0.09)
+        rad = np.linalg.norm(h[0] - p_ax) if h is not None else (rad_prev if rad_prev is not None else 0.035)
+        if rad_prev is not None:
+            rad = min(rad, rad_prev * 1.15 + 0.002)        # pas de saut vers la croupe
+        rad_prev = rad
+        arc += np.linalg.norm((p_ax + radial * rad) - prev)
+        s_equiv = arc / 1.4                                  # même échelle que les guides de 1,4 m
+        p = p_ax + radial * (rad + off_fn(s_equiv))
+        pts.append(p)
+        prev = p
+    # --- chute sous le tronçon ---
+    ax0 = _tail_axis_at_z(J, z_dock_end)
+    v = pts[-1][:2] - ax0[:2]
+    psi = np.arctan2(v[1] / 0.78, v[0]) if np.linalg.norm(v) > 1e-4 else -np.pi / 2
+    r_end = max(np.hypot(v[0], v[1] / 0.78), 1e-3)
+    drift = rng.uniform(-0.25, 0.25)
+    noise_ph = rng.uniform(0, 6.28)
     span = max(z_dock_end - z_end, 0.1)
-    for k, p in enumerate(P):
-        if p[2] < z_dock_end - 0.005:
-            ax = _tail_axis_at_z(J, p[2])
-            if psi is None:
-                v = p[:2] - ax[:2]
-                psi = np.arctan2(v[1], v[0]) if np.linalg.norm(v) > 1e-4 else -np.pi / 2
-                psi += rng.uniform(-0.15, 0.15)
-                drift = rng.uniform(-0.25, 0.25)
-                noise_ph = rng.uniform(0, 6.28)
-            f = np.clip((z_dock_end - p[2]) / span, 0, 1)
-            ps = psi + drift * f + 0.05 * np.sin(noise_ph + f * 7)
-            rr = np.interp(f, [c[0] for c in rprof], [c[1] for c in rprof]) * rfac * rng.uniform(0.97, 1.03)
-            target = np.array([ax[0] + np.cos(ps) * rr * 1.0, ax[1] + np.sin(ps) * rr * 0.78, p[2]])
-            wblend = smoothstep(0.0, 0.10, (z_dock_end - p[2]))
-            p = p * (1 - wblend) + target * wblend
-        out.append(p)
-        if p[2] <= z_end:
-            break
-    P = np.array(out)
-    # recolle exactement à z_end
-    if P[-1][2] < z_end and len(P) >= 2:
-        a0, a1 = P[-2], P[-1]
-        f = (a0[2] - z_end) / max(a0[2] - a1[2], 1e-9)
-        P[-1] = a0 + (a1 - a0) * f
+    rr_scale = rfac * rng.uniform(0.97, 1.03)
+    z = min(pts[-1][2], z_dock_end) - 0.02
+    while z > z_end:
+        f = np.clip((z_dock_end - z) / span, 0, 1)
+        ps = psi + drift * f + 0.05 * np.sin(noise_ph + f * 7)
+        rr = np.interp(f, [c[0] for c in rprof], [c[1] for c in rprof]) * rr_scale
+        w = smoothstep(0.0, 0.08, z_dock_end - z)            # raccord avec le rayon au bout du tronçon
+        rr = r_end * (1 - w) + rr * w
+        ax = _tail_axis_at_z(J, z)
+        pts.append(np.array([ax[0] + np.cos(ps) * rr, ax[1] + np.sin(ps) * rr * 0.78, z]))
+        z -= 0.025
+    ax = _tail_axis_at_z(J, z_end)
+    f = 1.0
+    rr = rprof[-1][1] * rr_scale
+    ps = psi + drift + 0.05 * np.sin(noise_ph + 7)
+    pts.append(np.array([ax[0] + np.cos(ps) * rr, ax[1] + np.sin(ps) * rr * 0.78, z_end]))
+    P = np.array(pts)
+    # dégagement : aucun point ne doit entrer dans le corps (fesses, jarrets)
+    for k in range(1, len(P)):
+        qq, nn, sd, _fi, _bc = surf.nearest(P[k])
+        if sd < 0.004:
+            P[k] = qq + nn * 0.004
     return resample(P, nout), q
 
 
@@ -690,8 +729,8 @@ def tail_natural(surf, J, crest, seed=29, part_id="tail_natural"):
     roots = np.zeros((len(phis), 3))
     ok = np.ones(len(phis), bool)
     for c, ph in enumerate(phis):
-        g = tail_guide(surf, J, 0.06, ph, 0.55, lambda s: 0.003 + 0.004 * s, rng, z_end0 + 0.05, z_dock_end,
-                       nout=NS)
+        g = tail_guide(surf, J, 0.06, ph, 0.62, dock_volume(0.003, 0.004, 0.010), rng, z_end0 + 0.05,
+                       z_dock_end, nout=NS)
         if g is None:
             ok[c] = False
             continue
@@ -708,13 +747,13 @@ def tail_natural(surf, J, crest, seed=29, part_id="tail_natural"):
     b.add_grid(grid, UVg, Sg, roots, FAC, tag=0)
     # --- cartes ---
     layers = [
-        dict(tag=1, n=58, a=(0.0, 0.90), phi=150, rfac=0.80, off=lambda s: 0.007 + 0.006 * s, width=(0.032, 0.045),
-             nacross=2, variants=["dense", "clumped", "dense", "short"], dz=0.035),
-        dict(tag=2, n=72, a=(0.0, 0.85), phi=158, rfac=1.0, off=lambda s: 0.010 + 0.008 * s, width=(0.030, 0.042),
-             nacross=2, variants=["clumped", "wispy", "split", "pointed", "clumped"], dz=0.05),
+        dict(tag=1, n=60, a=(0.0, 0.90), phi=150, rfac=0.80, off=dock_volume(0.007, 0.006, 0.018),
+             width=(0.032, 0.045), nacross=2, variants=["dense", "clumped", "dense", "short"], dz=0.035),
+        dict(tag=2, n=74, a=(0.0, 0.85), phi=158, rfac=0.93, off=dock_volume(0.010, 0.008, 0.028),
+             width=(0.030, 0.042), nacross=2, variants=["clumped", "wispy", "split", "pointed", "clumped"], dz=0.05),
         # mèches folles clairsemées en surface : adoucissent la silhouette (cartes étroites, texture « wispy »)
-        dict(tag=3, n=36, a=(0.25, 0.85), phi=160, rfac=1.05, off=lambda s: 0.012 + 0.008 * s, width=(0.016, 0.024),
-             nacross=2, variants=["wispy", "pointed"], dz=0.07),
+        dict(tag=3, n=36, a=(0.25, 0.85), phi=160, rfac=0.97, off=dock_volume(0.012, 0.008, 0.032),
+             width=(0.016, 0.024), nacross=2, variants=["wispy", "pointed"], dz=0.07),
     ]
     for lay in layers:
         _tail_cards(surf, J, b, rng, lay, z_end0, z_dock_end, TAIL_RADIUS, a_pow=1.3)
@@ -739,7 +778,7 @@ def _tail_cards(surf, J, b, rng, lay, z_end0, z_dock_end, rprof, a_pow=1.0):
         across = nrm(np.cross(F, tangents(P)))
         s = np.linspace(0, 1, len(P))
         w = rng.uniform(*lay["width"]) * (0.70 + 0.30 * np.sin(np.pi * np.clip(s * 0.9 + 0.1, 0, 1)))
-        tw0 = np.radians(rng.uniform(-28, 28))
+        tw0 = np.radians(rng.uniform(-18, 18))
         twist = tw0 * smoothstep(0.15, 0.45, s) + np.radians(rng.uniform(-12, 12)) * s
         variant = lay["variants"][rng.integers(len(lay["variants"]))]
         flip = rng.uniform() < 0.5

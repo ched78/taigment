@@ -242,8 +242,9 @@ class LimbSolver:
         x0 = np.clip(x0, self.lb + 1e-9, self.ub - 1e-9)
         res = least_squares(self.residuals, x0, bounds=(self.lb, self.ub), args=(parent_world, inp, scap),
                             method="trf", xtol=1e-10, ftol=1e-10, gtol=1e-10, max_nfev=400)
-        if np.any(x0 != 0.0):
-            # démarrage à chaud piégé dans un minimum local : on réessaie à froid et on garde le meilleur
+        if np.any(x0 != 0.0) and inp.w_ground == 0.0:
+            # appui planté : démarrage à chaud piégé dans un minimum local -> nouvel essai à froid (le meilleur
+            # est gardé) ; jamais en envol (éviterait des sauts de solution d'une image à l'autre)
             Ms, _ = self.world_chain(parent_world, res.x, inp, scap)
             if np.linalg.norm(self.sole_points(Ms)[0] - inp.toe) > 0.002:
                 cold = least_squares(self.residuals, np.clip(np.zeros_like(x0), self.lb + 1e-9, self.ub - 1e-9),

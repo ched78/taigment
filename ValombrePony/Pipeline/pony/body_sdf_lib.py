@@ -209,8 +209,10 @@ class Loft(Prim):
     Interpolation monotone (PCHIP). La distance est calculée dans le plan de section [I].
     """
 
-    def __init__(self, O, axis, normal, s, top, bot, w, wf, nt, nb):
+    def __init__(self, O, axis, normal, s, top, bot, w, wf, nt, nb, cap0=0.0, cap1=0.0):
         from scipy.interpolate import PchipInterpolator
+
+        self.cap0, self.cap1 = F32(cap0), F32(cap1)
 
         self.O = np.asarray(O, F32)
         self.ax = unit(axis).astype(F32)
@@ -232,8 +234,9 @@ class Loft(Prim):
                 for xx in (-row[2], row[2]):
                     pts.append(self.O + sv * self.ax + vv * self.nm + xx * self.xh)
         pts = np.array(pts)
-        self.lo = pts.min(0).astype(F32) - 0.01
-        self.hi = pts.max(0).astype(F32) + 0.01
+        capm = max(cap0, cap1)
+        self.lo = pts.min(0).astype(F32) - 0.01 - capm
+        self.hi = pts.max(0).astype(F32) + 0.01 + capm
 
     def params(self, s):
         return self.interp(np.clip(s, self.s[0], self.s[-1])).astype(F32)
@@ -249,9 +252,20 @@ class Loft(Prim):
         up = v >= zc
         h = np.where(up, top - zc, zc - bot)
         n = np.where(up, nt, nb)
-        d2 = superellipse_dist(x, v - zc, np.maximum(w, 1e-4), np.maximum(h, 1e-4), n)
-        e = np.maximum(self.s0 - s, s - self.s1)
-        return np.where(e > 0, np.where(d2 > 0, np.sqrt(d2 * d2 + e * e), e), d2).astype(F32)
+        # bouts arrondis (dôme ellipsoïdal de longueur cap) ou plats
+        e0 = self.s0 - s
+        e1 = s - self.s1
+        sh = np.ones_like(s)
+        if self.cap0 > 0:
+            k = np.clip(e0 / self.cap0, 0.0, 0.999)
+            sh = np.where(e0 > 0, np.sqrt(1.0 - k * k), sh)
+        if self.cap1 > 0:
+            k = np.clip(e1 / self.cap1, 0.0, 0.999)
+            sh = np.where(e1 > 0, np.sqrt(1.0 - k * k), sh)
+        d2 = superellipse_dist(x, v - (zc - (1 - sh) * 0.0), np.maximum(w * sh, 1e-4), np.maximum(h * sh, 1e-4), n)
+        e = np.maximum(e0 - (self.cap0 if self.cap0 > 0 else 0.0), e1 - (self.cap1 if self.cap1 > 0 else 0.0))
+        flat = np.where(e > 0, np.where(d2 > 0, np.sqrt(d2 * d2 + e * e), e), d2)
+        return flat.astype(F32)
 
 
 class VLoft(Prim):

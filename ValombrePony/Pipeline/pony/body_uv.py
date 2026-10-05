@@ -46,15 +46,7 @@ def classify_faces(bm, sdf, pocket_faces, leg_cut=(0.66, 0.68)):
         t = D @ ea.e
         rad = np.linalg.norm(D - np.clip(t, 0, ea.length)[:, None] * ea.e, axis=1)
         ear = (t > 0.010) & (rad < 0.05) & (C[:, 2] > 1.3)
-        cav = sdf.region_groups[f"ear_{side}"].nodes[1][1] if len(sdf.region_groups[f"ear_{side}"].nodes) > 1 \
-            else None
-        if cav is not None:
-            dc = cav.eval(C.astype(np.float32))
-            inner = ear & (np.abs(dc) < 0.0025) & ((N @ ea.f) > -0.2)
-        else:
-            inner = np.zeros(nF, bool)
-        lab[ear & ~inner] = f"ear_out_{side}"
-        lab[inner] = f"ear_in_{side}"
+        lab[ear] = f"ear_{side}"
     # sabots (paroi / sole) puis bas des membres
     for key in ("fl", "fr", "hl", "hr"):
         hg = sdf.region_groups[f"hoof_{key}"]
@@ -193,14 +185,57 @@ def compute_seams(bm, sdf, lab):
         ea = feats[f"ear_{side}"]
         back = 1.0 + 3.0 * np.clip((nm @ (-ea.f)) * -1 + 1.0, 0, 2)
         cut(["head"], ea.B - 0.02 * ea.f, hp(-0.06, 0.03), back,
-            a_extra=lambda i, s=side: any(r.startswith(f"ear_") and r.endswith(side) for r in vert_regions[i]),
-            b_extra=on_border("head"))
+            a_extra=lambda i, s=side: f"ear_{s}" in vert_regions[i], b_extra=on_border("head"))
         # dos de l'oreille : de la base à la pointe (le long de l'arête arrière)
-        cut([f"ear_out_{side}"], ea.B - 0.015 * ea.f + 0.01 * ea.e, ea.B + ea.e * ea.length * 0.97, back,
-            a_extra=on_border(f"ear_out_{side}"), b_extra=on_border(f"ear_out_{side}"))
-    me_seam = seam
+        cut([f"ear_{side}"], ea.B - 0.02 * ea.f + 0.01 * ea.e, ea.B + ea.e * ea.length * 0.99, back,
+            a_extra=on_border(f"ear_{side}"))
+    seam = merge_small_islands(bm, seam, min_faces=40)
     for i, e in enumerate(bm.edges):
-        e.seam = bool(me_seam[i])
+        e.seam = bool(seam[i])
+    return seam
+
+
+def _islands_from_seams(bm, seam):
+    bm.faces.ensure_lookup_table()
+    parent = np.arange(len(bm.faces))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, e in enumerate(bm.edges):
+        if seam[i] or len(e.link_faces) != 2:
+            continue
+        a, b = find(e.link_faces[0].index), find(e.link_faces[1].index)
+        if a != b:
+            parent[a] = b
+    return np.array([find(i) for i in range(len(bm.faces))])
+
+
+def merge_small_islands(bm, seam, min_faces=40):
+    """Supprime les fragments (îlots < min_faces faces) en effaçant les coutures qui les bordent."""
+    seam = seam.copy()
+    for _ in range(6):
+        isl = _islands_from_seams(bm, seam)
+        ids, cnt = np.unique(isl, return_counts=True)
+        small = set(ids[cnt < min_faces])
+        if not small:
+            break
+        changed = False
+        for i, e in enumerate(bm.edges):
+            if not seam[i] or len(e.link_faces) != 2:
+                continue
+            a, b = isl[e.link_faces[0].index], isl[e.link_faces[1].index]
+            if a != b and (a in small or b in small):
+                seam[i] = False
+                changed = True
+            elif a == b and a in small:
+                seam[i] = False
+                changed = True
+        if not changed:
+            break
     return seam
 
 

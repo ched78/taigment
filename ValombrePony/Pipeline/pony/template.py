@@ -156,9 +156,10 @@ def joint_table(wh: float = REFERENCE_WH):
     j += _neck_chain()
     j += [
         ("head", "neck_06", tuple(HEAD_JOINT), tuple(MUZZLE_CENTER)),
-        ("jaw", "head", head_point(0.08, -0.02), head_point(0.47, -0.075)),
-        ("lip_lower", "jaw", head_point(0.46, -0.07), head_point(0.51, -0.07)),
-        ("lip_upper", "head", head_point(0.45, -0.01), head_point(0.52, -0.02)),
+        # ATM et lèvres : ajustés au maillage du corps (face raccourcie, body_sdf.FACE_K) — agent « body »
+        ("jaw", "head", head_point(0.075, -0.035), head_point(0.445, -0.080)),
+        ("lip_lower", "jaw", head_point(0.425, -0.075), head_point(0.470, -0.072)),
+        ("lip_upper", "head", head_point(0.422, -0.020), head_point(0.476, -0.026)),
     ]
     j += _ear("l", -1.0) + _ear("r", 1.0)
     j += _eye("l", -1.0) + _eye("r", 1.0)

@@ -46,31 +46,60 @@ Sorties : `Pipeline/build/textures/coat_albedo_default.png` (2048², bai avec é
 
 ---
 
-## 2. API Swift (contrat inter-agents de PonyKit)
+## 2. API Swift publique (`PonyCore`, dossier `Sources/PonyCore/Coat/`) — stable, pour l'agent « kit »
+
+Tout est en `PonyCore` (Foundation seule) ; les valeurs sont `Sendable`, les fonctions de composition sont
+**pures** (aucun état global mutable) et peuvent tourner hors du `MainActor`.
+
+### Composer les textures
 
 ```swift
-let cfg = CoatPreset.named("palomino")!.configuration          // ou CoatConfiguration.default (bai, étoile)
-var c = cfg; c.legs.hindLeft.height = 0.3; c.face.kind = .blaze
-let albedo = CoatCompositor.composeBody(c, maps: maps, resolution: CoatCompositor.previewResolution) // 1024 en glissant
-let final  = CoatCompositor.composeBody(c, maps: maps, resolution: CoatCompositor.finalResolution)   // 2048 au relâcher
-let mane   = CoatCompositor.composeHair(c, strands: maps.hairStrands!)   // alpha des mèches conservé
-let iris   = CoatCompositor.composeIris(c)                                // 512²
-let ph = c.phenotype   // bodyColor, maneColor, eyeColor, hooves (.dark/.light/.striped/.custom), pinkSkin…
+// Cartes chargées par PonyKit (PNG « raw » du SPEC §4 décodés en RGBA8 SANS gestion de couleur) :
+let maps = CoatMaps(shading: shadingImg, regions: regionsImg, params: paramsImg, patterns: patternsImg,
+                    hairStrands: strandsImg,            // hair_strands.png (agent « hair »), optionnel
+                    irisDetail: nil,                     // carte grise d'iris optionnelle
+                    landmarks: .default)                 // ou valeurs de body_meta.json / PonyRig.json si fournies
+var c = CoatPreset.named("palomino")!.configuration      // ou CoatConfiguration.default (bai, étoile)
+c.legs.hindLeft.height = 0.3
+c.face.kind = .blaze
+let preview = CoatCompositor.composeBody(c, maps: maps, resolution: CoatCompositor.previewResolution) // 1024
+let albedo  = CoatCompositor.composeBody(c, maps: maps, resolution: CoatCompositor.finalResolution)   // 2048
+let mane    = CoatCompositor.composeHair(c, maps: maps)              // RGBA8Image? (alpha des mèches conservé)
+let iris    = CoatCompositor.composeIris(c)                          // 512², ou composeIris(c, detail:, resolution:)
+let ph      = c.phenotype                                            // couleurs dérivées (UI, teintes simples)
 ```
 
-- `PonyColor` : sRGB 0…1, `init(hex:)` (invalide → noir), `hexString`, `linear`, `mix` (en sRGB), `init(linear:)`.
-- `RGBA8Image` : RGBA 8 bits, rangées de haut en bas.
-- `CoatConfiguration` (Codable/Equatable/Hashable/Sendable) : `genotype`, `expression`, `face`, `legs`, `hair`,
-  `irisStyle`, `overrides` (mode libre), `seed`. `plain` = bai sans marque ; `default` = bai avec étoile.
-  Contient aussi la couleur des crins / sabots / yeux (dérivées, ou forcées via `overrides`).
-- `CoatMaps` : les 4 cartes du SPEC §4 + `hairStrands` + `irisDetail` optionnels + `landmarks`.
-  `CoatMaps.synthetic(size:)` fournit des cartes de test.
-- `CoatPreset.all` (24 présets), `CoatPreset.named(_:)`.
+| Symbole | Rôle |
+|---|---|
+| `CoatCompositor.composeBody(_:maps:resolution:) -> RGBA8Image` | Albedo sRGB du corps (UV0), `resolution²` (défaut 2048). |
+| `CoatCompositor.composeHair(_:strands:) -> RGBA8Image` / `composeHair(_:maps:) -> RGBA8Image?` | Albedo sRGB + alpha des crins, taille de la texture de mèches. |
+| `CoatCompositor.composeIris(_:detail:resolution:) -> RGBA8Image` | Texture d'iris sRGB (défaut 512²). |
+| `CoatCompositor.previewResolution / finalResolution / irisResolution` | 1024 / 2048 / 512. |
+| `CoatMaps` (+ `Region`, `synthetic(size:)`, `syntheticStrands(width:height:)`) | Cartes d'entrée ; cartes synthétiques de test. |
+| `CoatLandmarks` (`coronet`, `faceEyeV`, `faceEyeU`, `nostrilV`, `.default`) | Repères des cartes (unités des canaux). |
+| `CoatConfiguration` (`genotype`, `expression`, `face`, `legs`, `hair`, `irisStyle`, `overrides`, `seed` ; `.plain`, `.default`, `make(_:)`, `phenotype`, `maneColor`, `eyeColor`, `hoofColors`) | Toute la couleur du poney ; Codable / Equatable / Hashable / Sendable. |
+| `CoatGenotype`, `Zygosity`, `ExtensionGenotype`, `AgoutiGenotype`, `CreamPearlGenotype`, `BaseCoat`, `LeopardPattern` | Génotype simplifié (§3). |
+| `CoatExpression` | Nuance, modificateurs, stades, couvertures (§3). |
+| `FaceMarking` / `FaceMarkingKind`, `LegMarking` / `LegMarkings` / `LegMarkingCategory` | Marques (§5) ; `frenchName` pour l'UI. |
+| `CoatHairSettings`, `IrisStyle`, `CoatOverrides` | Crins, iris, mode libre. |
+| `CoatPhenotype`, `EyeColorKind`, `HoofAppearance` | Phénotype dérivé (§4). |
+| `CoatPreset` (`id`, `name`, `summary`, `configuration`, `all`, `named(_:)`, `defaultPreset`) | 24 présets FR (§8). |
+| `PonyColor`, `RGBA8Image` | Types de base partagés (contrat inter-agents). |
 
-Le JSON Codable est **partagé** avec Python (mêmes clés ; `PonyColor` = `{"r","g","b"}`) : les vecteurs de
-référence décodent en Swift des configurations écrites par Python.
+### Notes d'intégration RealityKit [I] (non testées ici)
 
----
+- Les **sorties** sont en sRGB : créer les textures avec la sémantique *couleur* (`.color`). Les **cartes
+  d'entrée** sont des données : les décoder octet pour octet, sans conversion d'espace colorimétrique (sinon les
+  seuils et l'id de région ×16 sont faussés). L'id de région est lu au plus proche voisin.
+- `composeBody` est coûteux (une passe sur resolution² texels, toutes les couches) : l'appeler hors du
+  `MainActor`, 1024 pendant le glissement d'un curseur (avec anti-rebond), 2048 au relâcher ; garder la dernière
+  image pour éviter de recomposer si `CoatConfiguration` n'a pas changé (elle est `Hashable`).
+- Une seule texture d'iris pour les deux yeux (le vairon est sectoriel) ; une seule texture de crins pour
+  crinière, toupet, queue et fanons.
+- `CoatPresetsData.swift` est **généré** (`s05_coat.py --swift`) : modifier les présets dans
+  `coat_reference.py` (table `PRESETS`), pas dans le Swift.
+- Le JSON Codable est **partagé** avec Python (mêmes clés ; `PonyColor` = `{"r","g","b"}`) : les vecteurs de
+  référence décodent en Swift des configurations écrites par Python.
 
 ## 3. Génotype simplifié (`CoatGenotype`) [NV]
 

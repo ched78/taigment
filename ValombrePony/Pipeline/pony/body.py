@@ -116,8 +116,46 @@ def build_high(sdf_full, h=0.003):
 # ==============================================================================================
 # Basse définition : QuadriFlow
 # ==============================================================================================
+def _quadriflow_once(src_me, target_faces, seed):
+    """Un essai QuadriFlow symétrique sur une copie ; renvoie (co, faces, chk) ou None si échec silencieux."""
+    me = src_me.copy()
+    ob = bpy.data.objects.new("QF_try", me)
+    bpy.context.scene.collection.objects.link(ob)
+    n0 = len(me.polygons)
+    me.use_mirror_x = True   # indispensable : sinon use_mesh_symmetry n'a aucun effet (mesuré)
+    make_active(ob)
+    bpy.ops.object.quadriflow_remesh(target_faces=target_faces, mode="FACES", use_mesh_symmetry=True,
+                                     use_preserve_sharp=False, use_preserve_boundary=False,
+                                     preserve_attributes=False, smooth_normals=False, seed=seed)
+    me = ob.data
+    out = None
+    if len(me.polygons) != n0:
+        # la symétrie de QuadriFlow laisse les deux moitiés non soudées sur le plan x = 0 : on les soude
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        mid = {v for e in bm.edges if e.is_boundary for v in e.verts}
+        mid |= {v for v in bm.verts if abs(v.co.x) < 1e-4}
+        mid = list(mid)
+        for v in mid:
+            v.co.x = 0.0
+        bmesh.ops.remove_doubles(bm, verts=mid, dist=2e-4)
+        bmesh.ops.dissolve_degenerate(bm, edges=bm.edges, dist=1e-5)
+        chk = topology_check(bm)
+        bm.verts.ensure_lookup_table()
+        co = np.array([v.co[:] for v in bm.verts])
+        faces = [np.array([v.index for v in f.verts]) for f in bm.faces]
+        bm.free()
+        out = (co, faces, chk)
+    bpy.data.objects.remove(ob, do_unlink=True)
+    bpy.data.meshes.remove(me)
+    return out
+
+
 def quadriflow(V, F, target_faces=11000, seed=0):
-    ob = mesh_from_numpy("QF_tmp", V, F)
+    """QuadriFlow symétrique (X) sur le maillage nettoyé. QuadriFlow peut échouer silencieusement ou
+    produire une soudure médiane non variété : essais déterministes (graine, cible ±1,5 %) jusqu'à un
+    maillage fermé (variété, 1 composante)."""
+    ob = mesh_from_numpy("QF_src", V, F)
     bm = bmesh.new()
     bm.from_mesh(ob.data)
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
@@ -126,40 +164,29 @@ def quadriflow(V, F, target_faces=11000, seed=0):
     bm.to_mesh(ob.data)
     bm.free()
     n0 = len(ob.data.polygons)
-    ob.data.use_mirror_x = True   # indispensable : sinon use_mesh_symmetry n'a aucun effet (mesuré)
-    make_active(ob)
     t0 = time.perf_counter()
-    bpy.ops.object.quadriflow_remesh(target_faces=target_faces, mode="FACES", use_mesh_symmetry=True,
-                                     use_preserve_sharp=False, use_preserve_boundary=False,
-                                     preserve_attributes=False, smooth_normals=False, seed=seed)
-    n1 = len(ob.data.polygons)
-    if n1 == n0:
-        raise RuntimeError("QuadriFlow a échoué silencieusement (nombre de faces inchangé)")
+    tries = [(target_faces, seed)] + [(int(target_faces * (1 + d)), seed + k) for k, d in
+                                      enumerate((0.015, -0.015, 0.03, -0.03, 0.045, -0.045), start=1)]
+    result = None
+    for tf, sd in tries:
+        r = _quadriflow_once(ob.data, tf, sd)
+        if r is None:
+            LOG(f"[low] QuadriFlow (cible {tf}, graine {sd}) : échec silencieux (faces inchangées)")
+            continue
+        co, faces, chk = r
+        if chk["boundary_edges"] or chk["non_manifold_edges"] or chk["non_manifold_verts"] or chk["components"] != 1:
+            LOG(f"[low] QuadriFlow (cible {tf}, graine {sd}) : rejeté {chk}")
+            continue
+        result = (co, faces)
+        LOG(f"[low] QuadriFlow {n0} -> {len(faces)} quads (cible {tf}, graine {sd}) en "
+            f"{time.perf_counter() - t0:.1f}s ; {chk}")
+        break
     me = ob.data
-    # la symétrie de QuadriFlow laisse les deux moitiés non soudées sur le plan x = 0 : on les soude
-    bm = bmesh.new()
-    bm.from_mesh(me)
-    mid = [v for v in bm.verts if abs(v.co.x) < 1e-4]
-    for v in mid:
-        v.co.x = 0.0
-    bmesh.ops.remove_doubles(bm, verts=mid, dist=1e-5)
-    chk = topology_check(bm)
-    bm.to_mesh(me)
-    bm.free()
-    if chk["boundary_edges"] or chk["non_manifold_edges"] or chk["components"] != 1:
-        raise RuntimeError(f"QuadriFlow : maillage non fermé après soudure {chk}")
-    st = mesh_stats(me)
-    LOG(f"[low] QuadriFlow {n0} -> {n1} faces ({st}) en {time.perf_counter() - t0:.1f}s")
-    co = np.zeros(len(me.vertices) * 3, np.float32)
-    me.vertices.foreach_get("co", co)
-    nl = np.zeros(len(me.polygons), np.int32)
-    me.polygons.foreach_get("loop_total", nl)
-    fl = np.zeros(int(nl.sum()), np.int32)
-    me.polygons.foreach_get("vertices", fl)
-    faces = np.split(fl, np.cumsum(nl)[:-1])
     bpy.data.objects.remove(ob, do_unlink=True)
     bpy.data.meshes.remove(me)
-    return co.reshape(-1, 3).astype(np.float64), faces
+    if result is None:
+        raise RuntimeError("QuadriFlow : aucun essai n'a donné un maillage fermé")
+    return result
 
 
 def bm_from_faces(V, faces):

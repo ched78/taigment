@@ -25,8 +25,12 @@ def build_armature(name: str = ARMATURE_NAME, wh: float = template.REFERENCE_WH,
     arm_data.display_type = "OCTAHEDRAL"
     obj = bpy.data.objects.new(name, arm_data)
     (collection or bpy.context.scene.collection).objects.link(obj)
+    # view_layer.objects peut contenir des entrées None tant que la vue n'est pas mise à jour
+    # (objets juste créés) : on met à jour puis on ignore les entrées vides.
+    bpy.context.view_layer.update()
     for o in bpy.context.view_layer.objects:
-        o.select_set(False)
+        if o is not None:
+            o.select_set(False)
     bpy.context.view_layer.objects.active = obj
     obj.select_set(True)
 

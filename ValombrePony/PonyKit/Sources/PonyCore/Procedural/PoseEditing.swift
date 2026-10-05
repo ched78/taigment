@@ -62,14 +62,19 @@ struct TurnPostureLayer {
         bend.update(target: targetBend, halfLife: 0.25, deltaTime: dt)
     }
 
-    /// Roulis du joint `body` autour de l'origine du modèle (centre du polygone d'appui au sol), donc des
-    /// sabots : tout le poney s'incline dans le virage. `model` doit être à jour pour `body` et son parent.
-    func applyLean(rig: ProceduralRig, pose: inout [Transform], model: inout [Transform], parents: [Int]) {
+    /// Roulis du joint `body` autour de la ligne des sabots **extérieurs** au virage (au sol, parallèle à
+    /// l'axe avant) : tout le poney s'incline vers l'intérieur ; les sabots extérieurs restent en place et
+    /// les sabots intérieurs descendent, ce que `FootPlanting` compense en fléchissant les membres intérieurs.
+    /// `model` doit être à jour pour `body` et son parent.
+    func applyLean(rig: ProceduralRig, hoofHalfWidth: Float, pose: inout [Transform], model: inout [Transform],
+                   parents: [Int]) {
         let b = rig.body
         if b < 0 || abs(lean.value) < 1e-5 { return }
         let d = Quat(axis: SIMD3<Float>(0, 0, 1), angle: lean.value)
+        // Inclinaison positive (virage à gauche) : le haut part vers −X, l'extérieur est à +X.
+        let pivot = SIMD3<Float>(lean.value > 0 ? hoofHalfWidth : -hoofHalfWidth, 0, 0)
         var m = model[b]
-        m.translation = d.act(m.translation)
+        m.translation = pivot + d.act(m.translation - pivot)
         m.rotation = (d * m.rotation).normalized
         PoseEditing.setModel(b, m, pose: &pose, model: &model, parents: parents)
     }

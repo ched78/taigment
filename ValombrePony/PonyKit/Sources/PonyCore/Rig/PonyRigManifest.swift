@@ -139,6 +139,8 @@ public struct PonyRigManifest: Codable, Sendable {
         /// Emplacements occupés (une pièce peut en occuper plusieurs, ex. guêtres : `legs_front`, `legs_hind`).
         public var slots: [String]
         public var materialSlots: [String]
+        /// Matériaux non personnalisables (`fixed_*`).
+        public var fixedMaterials: [String]
         public var fabricSlots: [String]
         public var blendShapes: [String]
         /// Identifiants de pièces **ou** noms d'emplacements incompatibles.
@@ -154,13 +156,15 @@ public struct PonyRigManifest: Codable, Sendable {
         }
 
         public init(id: String, file: String = "", category: String = "", slots: [String],
-                    materialSlots: [String] = [], fabricSlots: [String] = [], blendShapes: [String] = [],
-                    conflicts: [String] = [], requires: [String] = [], hides: [String] = []) {
+                    materialSlots: [String] = [], fixedMaterials: [String] = [], fabricSlots: [String] = [],
+                    blendShapes: [String] = [], conflicts: [String] = [], requires: [String] = [],
+                    hides: [String] = []) {
             self.id = id
             self.file = file.isEmpty ? "Parts/\(id).usdz" : file
             self.category = category
             self.slots = slots
             self.materialSlots = materialSlots
+            self.fixedMaterials = fixedMaterials
             self.fabricSlots = fabricSlots
             self.blendShapes = blendShapes
             self.conflicts = conflicts
@@ -169,7 +173,7 @@ public struct PonyRigManifest: Codable, Sendable {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case id, file, category, slot, slots, materialSlots, fabricSlots, blendShapes
+            case id, file, category, slot, slots, materialSlots, fixedMaterials, fabricSlots, blendShapes
             case conflicts, requires, hides
         }
 
@@ -192,6 +196,7 @@ public struct PonyRigManifest: Codable, Sendable {
             }
             slots = decodedSlots
             materialSlots = try c.decodeIfPresent([String].self, forKey: .materialSlots) ?? []
+            fixedMaterials = (try? c.decodeIfPresent([String].self, forKey: .fixedMaterials)) ?? []
             fabricSlots = try c.decodeIfPresent([String].self, forKey: .fabricSlots) ?? []
             blendShapes = try c.decodeIfPresent([String].self, forKey: .blendShapes) ?? []
             conflicts = try c.decodeIfPresent([String].self, forKey: .conflicts) ?? []
@@ -205,10 +210,9 @@ public struct PonyRigManifest: Codable, Sendable {
             try c.encode(file, forKey: .file)
             try c.encode(category, forKey: .category)
             try c.encode(slot, forKey: .slot)
-            if slots.count > 1 {
-                try c.encode(slots, forKey: .slots)
-            }
+            try c.encode(slots, forKey: .slots)
             try c.encode(materialSlots, forKey: .materialSlots)
+            try c.encode(fixedMaterials, forKey: .fixedMaterials)
             try c.encode(fabricSlots, forKey: .fabricSlots)
             try c.encode(blendShapes, forKey: .blendShapes)
             try c.encode(conflicts, forKey: .conflicts)
@@ -260,10 +264,23 @@ public struct PonyRigManifest: Codable, Sendable {
         public var events: [ClipEvent]
         /// Phase de foulée normalisée au temps 0 du clip (0 = poser du postérieur gauche).
         public var phaseOffset: Float
+        /// Cadence d'échantillonnage déclarée (le binaire fait foi).
+        public var fps: Float?
+        /// Longueur (m) et durée (s) d'une foulée, nombre de foulées dans le clip (facultatifs).
+        public var strideLength: Float?
+        public var strideDuration: Float?
+        public var stridesPerClip: Float?
+        /// Données du pipeline conservées telles quelles (format libre) : séquence des appuis, contacts par
+        /// image, pivot des virages.
+        public var footfalls: PonyJSONValue?
+        public var contacts: PonyJSONValue?
+        public var rootPivot: PonyJSONValue?
 
         public init(name: String, loop: Bool? = nil, duration: Float? = nil, frameCount: Int? = nil,
                     rootVelocity: SIMD3<Float>? = nil, rootYawRate: Float? = nil, mask: [String]? = nil,
-                    events: [ClipEvent] = [], phaseOffset: Float = 0) {
+                    events: [ClipEvent] = [], phaseOffset: Float = 0, fps: Float? = nil,
+                    strideLength: Float? = nil, strideDuration: Float? = nil, stridesPerClip: Float? = nil,
+                    footfalls: PonyJSONValue? = nil, contacts: PonyJSONValue? = nil, rootPivot: PonyJSONValue? = nil) {
             self.name = name
             self.loop = loop
             self.duration = duration
@@ -273,10 +290,28 @@ public struct PonyRigManifest: Codable, Sendable {
             self.mask = mask
             self.events = events
             self.phaseOffset = phaseOffset
+            self.fps = fps
+            self.strideLength = strideLength
+            self.strideDuration = strideDuration
+            self.stridesPerClip = stridesPerClip
+            self.footfalls = footfalls
+            self.contacts = contacts
+            self.rootPivot = rootPivot
+        }
+
+        /// Nombre de foulées du clip : `stridesPerClip`, sinon durée / `strideDuration`, sinon 1.
+        public var resolvedStridesPerClip: Double {
+            if let k = stridesPerClip, k > 0, k.isFinite { return Double(k) }
+            if let sd = strideDuration, sd > 0, let d = duration, d > 0 {
+                let k = Double(d / sd)
+                if k.isFinite && k >= 0.5 { return max(1, k.rounded()) }
+            }
+            return 1
         }
 
         private enum CodingKeys: String, CodingKey {
             case name, loop, duration, frameCount, rootVelocity, rootYawRate, mask, events, phaseOffset
+            case fps, strideLength, strideDuration, stridesPerClip, footfalls, contacts, rootPivot
         }
 
         public init(from decoder: Decoder) throws {
@@ -290,6 +325,13 @@ public struct PonyRigManifest: Codable, Sendable {
             mask = try? c.decodeIfPresent([String].self, forKey: .mask)
             events = (try? c.decodeIfPresent([ClipEvent].self, forKey: .events)) ?? []
             phaseOffset = (try? c.decodeIfPresent(Float.self, forKey: .phaseOffset)) ?? 0
+            fps = try? c.decodeIfPresent(Float.self, forKey: .fps)
+            strideLength = try? c.decodeIfPresent(Float.self, forKey: .strideLength)
+            strideDuration = try? c.decodeIfPresent(Float.self, forKey: .strideDuration)
+            stridesPerClip = try? c.decodeIfPresent(Float.self, forKey: .stridesPerClip)
+            footfalls = try? c.decodeIfPresent(PonyJSONValue.self, forKey: .footfalls)
+            contacts = try? c.decodeIfPresent(PonyJSONValue.self, forKey: .contacts)
+            rootPivot = try? c.decodeIfPresent(PonyJSONValue.self, forKey: .rootPivot)
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -303,6 +345,13 @@ public struct PonyRigManifest: Codable, Sendable {
             try c.encode(mask, forKey: .mask)
             try c.encode(events, forKey: .events)
             try c.encode(phaseOffset, forKey: .phaseOffset)
+            try c.encodeIfPresent(fps, forKey: .fps)
+            try c.encodeIfPresent(strideLength, forKey: .strideLength)
+            try c.encodeIfPresent(strideDuration, forKey: .strideDuration)
+            try c.encodeIfPresent(stridesPerClip, forKey: .stridesPerClip)
+            try c.encodeIfPresent(footfalls, forKey: .footfalls)
+            try c.encodeIfPresent(contacts, forKey: .contacts)
+            try c.encodeIfPresent(rootPivot, forKey: .rootPivot)
         }
     }
 
@@ -336,7 +385,8 @@ public struct PonyRigManifest: Codable, Sendable {
 
     public struct Procedural: Codable, Sendable, Equatable {
         public var lookChain: [LookJoint]
-        /// Forme libre : clés reconnues `left`/`l`, `right`/`r`, `leftTip`/`tip_l`, `rightTip`/`tip_r`.
+        /// Forme libre. Formes reconnues : `{"left": {"base": "ear_l", "tip": "ear_tip_l"}, "right": {…}}`
+        /// (exporteur) ou clés plates `left`/`l`, `leftTip`/`tip_l`, etc.
         public var ears: PonyJSONValue?
         public var tail: [String]
         public var mane: [String]
@@ -346,12 +396,17 @@ public struct PonyRigManifest: Codable, Sendable {
         public var eyelids: PonyJSONValue?
         public var eyes: [String]
         public var jaw: String?
+        /// `{"upper": "lip_upper", "lower": "lip_lower"}` (format libre).
+        public var lips: PonyJSONValue?
+        /// `{"belly": "belly", "stirrups": ["stirrup_l", "stirrup_r"]}` (format libre).
+        public var secondary: PonyJSONValue?
         public var belly: String?
         public var stirrups: [String]
 
         public init(lookChain: [LookJoint] = [], ears: PonyJSONValue? = nil, tail: [String] = [],
                     mane: [String] = [], forelock: [String] = [], eyelids: PonyJSONValue? = nil,
-                    eyes: [String] = [], jaw: String? = nil, belly: String? = nil, stirrups: [String] = []) {
+                    eyes: [String] = [], jaw: String? = nil, lips: PonyJSONValue? = nil,
+                    secondary: PonyJSONValue? = nil, belly: String? = nil, stirrups: [String] = []) {
             self.lookChain = lookChain
             self.ears = ears
             self.tail = tail
@@ -360,12 +415,14 @@ public struct PonyRigManifest: Codable, Sendable {
             self.eyelids = eyelids
             self.eyes = eyes
             self.jaw = jaw
+            self.lips = lips
+            self.secondary = secondary
             self.belly = belly
             self.stirrups = stirrups
         }
 
         private enum CodingKeys: String, CodingKey {
-            case lookChain, ears, tail, mane, forelock, eyelids, eyes, jaw, belly, stirrups
+            case lookChain, ears, tail, mane, forelock, eyelids, eyes, jaw, lips, secondary, belly, stirrups
         }
 
         public init(from decoder: Decoder) throws {
@@ -378,8 +435,17 @@ public struct PonyRigManifest: Codable, Sendable {
             eyelids = try? c.decodeIfPresent(PonyJSONValue.self, forKey: .eyelids)
             eyes = (try? c.decodeIfPresent([String].self, forKey: .eyes)) ?? []
             jaw = try? c.decodeIfPresent(String.self, forKey: .jaw)
-            belly = try? c.decodeIfPresent(String.self, forKey: .belly)
-            stirrups = (try? c.decodeIfPresent([String].self, forKey: .stirrups)) ?? []
+            lips = try? c.decodeIfPresent(PonyJSONValue.self, forKey: .lips)
+            secondary = try? c.decodeIfPresent(PonyJSONValue.self, forKey: .secondary)
+            var b = try? c.decodeIfPresent(String.self, forKey: .belly)
+            var st = (try? c.decodeIfPresent([String].self, forKey: .stirrups)) ?? []
+            // Forme de l'exporteur : `secondary.belly`, `secondary.stirrups`.
+            if b == nil { b = secondary?["belly"]?.stringValue }
+            if st.isEmpty, let arr = secondary?["stirrups"]?.arrayValue {
+                st = arr.compactMap { $0.stringValue }
+            }
+            belly = b
+            stirrups = st
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -392,6 +458,8 @@ public struct PonyRigManifest: Codable, Sendable {
             try c.encodeIfPresent(eyelids, forKey: .eyelids)
             try c.encode(eyes, forKey: .eyes)
             try c.encodeIfPresent(jaw, forKey: .jaw)
+            try c.encodeIfPresent(lips, forKey: .lips)
+            try c.encodeIfPresent(secondary, forKey: .secondary)
             try c.encodeIfPresent(belly, forKey: .belly)
             try c.encode(stirrups, forKey: .stirrups)
         }
@@ -402,7 +470,7 @@ public struct PonyRigManifest: Codable, Sendable {
     public struct MorphSlider: Codable, Sendable, Equatable {
         /// Identifiant du curseur (`legLength`, `neckLength`, `bodyLength`, …).
         public var id: String
-        /// Blend shape appliquée pour les valeurs positives.
+        /// Blend shape appliquée pour les valeurs positives (`null` si la forme n'existe pas sur le corps).
         public var plus: String?
         /// Blend shape appliquée pour les valeurs négatives.
         public var minus: String?

@@ -94,8 +94,8 @@ struct EarLayer {
 
     private func applyEar(_ ear: EarState, base: Int, tip: Int, side: Float, pose: inout [Transform]) {
         if base >= 0 {
-            let q = Quat(axis: SIMD3<Float>(1, 0, 0), angle: ear.tilt.value)
-                * Quat(axis: SIMD3<Float>(0, 1, 0), angle: ear.outward.value * side)
+            let q = Quat(axis: SIMD3<Float>(1, 0, 0), angle: ear.tilt.value) *
+                Quat(axis: SIMD3<Float>(0, 1, 0), angle: ear.outward.value * side)
             pose[base].rotation = (pose[base].rotation * q).normalized
         }
         if tip >= 0 {

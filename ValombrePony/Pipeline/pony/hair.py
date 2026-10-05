@@ -9,13 +9,30 @@ poids normalisés, matériau unique `M_Hair`) :
   `hair_albedo_default.png` (albedo d'aperçu brun dérivé de hair_strands, pour Blender / Quick Look).
 
 Ajustement au corps : si `Pipeline/build/body.blend` (objet `Body`) existe, les racines sont recalées sur sa surface
-réelle (plus proche point / rayons) avec une pénétration contrôlée de ROOT_DEPTH, les mèches restent au-dessus de
-la peau (collisions pendant la croissance + passe de dégagement), et les poids des racines sont transférés depuis
-les poids de peau du corps. Sinon, un corps PROVISOIRE (SDF approximative alignée sur les joints, poids
-automatiques Blender) est utilisé et le rapport l'indique (`body_source = "provisional"`).
+réelle (plus proche point / rayons) avec une pénétration contrôlée de ROOT_DEPTH (2,5 mm), les mèches restent
+au-dessus de la peau (collisions pendant la croissance + passes de dégagement des sommets et des centres de faces),
+et les poids sont transférés depuis les poids de peau du corps (au plus proche point de chaque sommet pour la
+crinière et le toupet). Sinon, un corps PROVISOIRE est utilisé — la SDF anatomique de l'agent « body »
+(`body_sdf`, variante fermée) si elle est importable, sinon une SDF grossière — avec des poids automatiques Blender
+(chaleur) ; le rapport l'indique (`body_source = "provisional"`).
+
+Poids (≤ 4 influences, limite continue) :
+  crinières : peau du corps sous chaque sommet, puis la part de neck_k passe progressivement (racine → pointe,
+              jusqu'à 85 %) à mane_k (enfant de neck_k) : déformation identique à la peau quand les mane_* sont au
+              repos, balancement secondaire par les ressorts du runtime. Boutons des nattes : rigides (peau sous
+              le bouton).
+  toupets   : peau (tête) puis chaîne forelock_01…03 par projection (jusqu'à 92 % aux pointes ; 35 % pour la natte).
+  queues    : peau à la racine puis dégradé le long de tail_01…tail_10 (projection sur la chaîne).
+  fanons    : peau à la racine puis *_cannon_* / *_pastern_* par projection.
+
+Indications runtime pour M_Hair [I] : `opacityThreshold` 0,4 (alpha testé, pas de mélange), `faceCulling = .none`
+(cartes simples, pas de double face dans l'USD), rugosité ≈ 0,48 ; albedo recalculé par le compositeur depuis
+`hair_strands.png` (canaux : voir hair_texture.py). Les normales des cartes sont des normales « de volume »
+(65 % direction extérieure de la masse de crins + 35 % normale géométrique) pour un éclairage cohérent des deux faces.
 
 Les positions des joints sont toujours lues sur l'armature construite par `rig.build_armature()`.
 Déterminisme : graines fixes (hair_texture.SEED, une graine par générateur).
+Relance : `python3 Pipeline/stages/s03_hair.py` (cf. ce script pour les options).
 """
 from __future__ import annotations
 
@@ -37,7 +54,7 @@ PARTS_DIR = cv.BUILD_DIR / "parts"
 TEX_DIR = cv.TEXTURE_BUILD_DIR
 CACHE_DIR = cv.BUILD_DIR / "hair_cache"
 ANCHORS_JSON = PARTS_DIR / "mane_braided_anchors.json"
-PROVISIONAL_CACHE = CACHE_DIR / "provisional_body_v1.npz"
+PROVISIONAL_CACHE = CACHE_DIR / "provisional_body.npz"
 
 # Os non déformants pour la peau du corps provisoire (os secondaires / accessoires) [I]
 _NON_SKIN = ("mane_", "forelock_", "stirrup_", "eye_", "eyelid_")
@@ -95,19 +112,46 @@ def _auto_skin_weights(V, F, arm):
     return hg.limit_influences(W), unweighted
 
 
+def _provisional_mesh(J, log=print):
+    """Maillage du corps provisoire : de préférence la SDF anatomique de l'agent « body » (`body_sdf`, variante
+    fermée `features=False`, bande étroite h = 8 mm) ; à défaut, la SDF grossière de `hair_surface`."""
+    try:
+        from . import body_sdf
+
+        sdf = body_sdf.build_sdf(joints=template.joint_table(), params=body_sdf.BodyParams(features=False))
+        V, F = body_sdf.mesh_narrowband(sdf, h=0.008, log=lambda *a, **k: None)
+        return np.asarray(V, np.float64), np.asarray(F, np.int64), "body_sdf"
+    except Exception as e:      # module absent / en cours de modification par l'agent body
+        log(f"[hair] body_sdf indisponible ({type(e).__name__}: {e}) -> SDF grossière de hair_surface")
+        V, F = hs.provisional_body(J)
+        return V, F, "hair_surface"
+
+
+def _provisional_key(J):
+    import hashlib
+
+    h = hashlib.sha1(_joint_signature(J).tobytes())
+    for f in ("body_sdf.py", "body_sdf_lib.py", "hair_surface.py"):
+        p = Path(__file__).resolve().parent / f
+        if p.exists():
+            h.update(p.read_bytes())
+    return h.hexdigest()[:16]
+
+
 def provisional_surface(J, arm, log=print, use_cache=True):
+    key = _provisional_key(J)
     if use_cache and PROVISIONAL_CACHE.exists():
-        d = np.load(PROVISIONAL_CACHE)
-        if np.allclose(d["J"], _joint_signature(J)):
-            return hs.BodySurface(d["V"], d["F"], d["W"], source="provisoire (cache)"), d
+        d = np.load(PROVISIONAL_CACHE, allow_pickle=False)
+        if str(d["key"]) == key:
+            return hs.BodySurface(d["V"], d["F"], d["W"], source=f"provisoire {d['kind']} (cache)"), d
     t0 = time.time()
-    V, F = hs.provisional_body(J)
+    V, F, kind = _provisional_mesh(J, log)
     W, unweighted = _auto_skin_weights(V, F, arm)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(PROVISIONAL_CACHE, V=V, F=F, W=W, J=_joint_signature(J))
-    log(f"[hair] corps provisoire : {len(V)} sommets, {len(F)} triangles, {unweighted} sans poids "
+    np.savez_compressed(PROVISIONAL_CACHE, V=V, F=F, W=W, key=key, kind=kind)
+    log(f"[hair] corps provisoire ({kind}) : {len(V)} sommets, {len(F)} triangles, {unweighted} sans poids "
         f"({time.time() - t0:.1f}s)")
-    return hs.BodySurface(V, F, W, source="provisoire"), {"V": V, "F": F, "W": W}
+    return hs.BodySurface(V, F, W, source=f"provisoire {kind}"), {"V": V, "F": F, "W": W, "kind": kind}
 
 
 def _joint_signature(J):
@@ -196,6 +240,8 @@ def build_parts(part_ids=None, prefer_real=True, write=True, log=print, textures
         A = b.arrays()
         V, cl = hg.enforce_clearance(surf, A["V"], A["S"], A["ROOTFLAG"], min_off=0.003,
                                      root_depth=hst.ROOT_DEPTH)
+        V, fcl = hg.enforce_face_clearance(surf, V, A["F"], A["ROOTFLAG"])
+        cl.update(fcl)
         A["V"] = V
         pen = hg.penetration_report(surf, V, A["F"], A["ROOTFLAG"])
         ws = hg.weight_stats(W)
@@ -203,7 +249,7 @@ def build_parts(part_ids=None, prefer_real=True, write=True, log=print, textures
             "vertices": len(V), "triangles": b.tri_count, "budget": hst.BUDGETS[pid],
             "uv_in_unit": bool((A["UV"] >= 0).all() and (A["UV"] <= 1).all()),
             "duplicate_vertices": hg.duplicate_report(V, A["UV"]),
-            "pushed_out": cl["pushed"], **pen, **{k: v for k, v in ws.items() if k != "joints"},
+            "pushed_out": cl["pushed"], "faces_pushed": cl["faces_pushed"], **pen, **{k: v for k, v in ws.items() if k != "joints"},
             "joints": ws["joints"], "seconds": round(time.time() - t0, 2),
         }
         stats["parts"][pid] = st
@@ -214,7 +260,7 @@ def build_parts(part_ids=None, prefer_real=True, write=True, log=print, textures
             anchors_doc = extra.get("anchors")
         if write:
             # sauvegarde : nouvelle scène vide (la surface BVH est indépendante de bpy.data)
-            np_arrays = {k: A[k] for k in ("V", "F", "UV", "FACING", "TAG", "S")}
+            np_arrays = {k: A[k] for k in ("V", "F", "UV", "FACING", "TAG", "S", "ROOTFLAG")}
             hg.write_part_blend(pid, np_arrays, W, PARTS_DIR / f"{pid}.blend", textures_rel,
                                 props={"body_source": kind, "triangles": b.tri_count})
             # write_part_blend réinitialise la scène : on reconstruit l'armature pour les pièces suivantes
@@ -241,3 +287,104 @@ def main(argv=None):
     if a.stats:
         Path(a.stats).write_text(json.dumps(st, indent=1, ensure_ascii=False, default=float))
     return st
+
+
+# ----------------------------------------------------------------------------------------------
+# Vérification indépendante des fichiers écrits
+# ----------------------------------------------------------------------------------------------
+def verify_part_file(pid, path=None):
+    """Rouvre `<id>.blend` et vérifie le contrat de la tâche. Renvoie (ok, dict de mesures, liste d'erreurs)."""
+    import bpy
+
+    path = Path(path or PARTS_DIR / f"{pid}.blend")
+    errors = []
+    bpy.ops.wm.open_mainfile(filepath=str(path))
+    ob = bpy.data.objects.get(pid)
+    if ob is None or ob.type != "MESH":
+        return False, {}, [f"objet mesh {pid!r} absent"]
+    mods = [m for m in ob.modifiers]
+    arm_mods = [m for m in mods if m.type == "ARMATURE"]
+    if len(mods) != 1 or len(arm_mods) != 1:
+        errors.append(f"modificateurs : {[m.type for m in mods]} (attendu : un seul ARMATURE)")
+    arm = arm_mods[0].object if arm_mods else None
+    if arm is None or arm.name != "PonyRig" or arm.type != "ARMATURE":
+        errors.append("le modificateur Armature ne cible pas l'armature PonyRig")
+    else:
+        names = [b.name for b in arm.data.bones]     # ordre hiérarchique de Blender : comparaison d'ensembles
+        if sorted(names) != sorted(template.JOINT_NAMES):
+            errors.append("os de PonyRig différents du gabarit (noms)")
+            names = [n for n in names if n in template.JOINT_NAMES]
+        jt = {e["name"]: e for e in template.joint_table()}
+        dev = max(float(np.abs(np.array(arm.data.bones[n].head_local) - np.array(jt[n]["head"])).max())
+                  for n in names)
+        if dev > 1e-5:
+            errors.append(f"positions de repos de PonyRig ≠ gabarit (écart {dev:.2e} m)")
+    vg = [g.name for g in ob.vertex_groups]
+    if vg != list(template.JOINT_NAMES):
+        errors.append(f"groupes de sommets ≠ 70 joints dans l'ordre ({len(vg)} groupes)")
+    me = ob.data
+    n = len(me.vertices)
+    W = np.zeros((n, len(vg)))
+    for v in me.vertices:
+        for g in v.groups:
+            W[v.index, g.group] = g.weight
+    nz = (W > 0).sum(1)
+    sums = W.sum(1)
+    if nz.max() > 4:
+        errors.append(f"{int((nz > 4).sum())} sommets avec > 4 influences")
+    if np.abs(sums - 1).max() > 1e-3:
+        errors.append(f"poids non normalisés (écart max {np.abs(sums - 1).max():.2e})")
+    uvl = me.uv_layers.active
+    uv = np.zeros(len(me.loops) * 2)
+    if uvl is None:
+        errors.append("pas de carte UV")
+    else:
+        uvl.data.foreach_get("uv", uv)
+        if uv.min() < 0 or uv.max() > 1:
+            errors.append(f"UV hors [0,1] ({uv.min():.4f}…{uv.max():.4f})")
+    mats = [m.name for m in me.materials if m]
+    if mats != [hg.HAIR_MATERIAL_NAME]:
+        errors.append(f"matériaux {mats} (attendu [{hg.HAIR_MATERIAL_NAME}])")
+    missing_tex = []
+    for img in bpy.data.images:
+        if img.filepath and not Path(bpy.path.abspath(img.filepath)).exists():
+            missing_tex.append(img.filepath)
+    if missing_tex:
+        errors.append(f"textures introuvables : {missing_tex}")
+    me.calc_loop_triangles()
+    co = np.zeros(n * 3)
+    me.vertices.foreach_get("co", co)
+    lv = np.zeros(len(me.loops), np.int64)
+    me.loops.foreach_get("vertex_index", lv)
+    vuv = np.zeros((n, 2))
+    vuv[lv] = uv.reshape(-1, 2)
+    dups = hg.duplicate_report(co.reshape(-1, 3), vuv)
+    if dups:
+        errors.append(f"{dups} sommets dupliqués (même position et même UV)")
+    used = np.zeros(n, bool)
+    used[lv] = True
+    if (~used).any():
+        errors.append(f"{int((~used).sum())} sommets isolés (sans face)")
+    m = {"triangles": len(me.loop_triangles), "vertices": n, "max_influences": int(nz.max()),
+         "weight_sum_err": float(np.abs(sums - 1).max()), "uv_range": [float(uv.min()), float(uv.max())],
+         "materials": mats, "image_paths": sorted({i.filepath for i in bpy.data.images if i.filepath}),
+         "joints_used": sorted(template.JOINT_NAMES[j] for j in np.nonzero(W.sum(0) > 0)[0])}
+    if m["triangles"] > hst.BUDGETS[pid]:
+        errors.append(f"budget dépassé : {m['triangles']} > {hst.BUDGETS[pid]} triangles")
+    return not errors, m, errors
+
+
+def verify_all(part_ids=None, log=print):
+    out = {}
+    for pid in part_ids or PART_IDS:
+        ok, m, errs = verify_part_file(pid)
+        out[pid] = {"ok": ok, **m, "errors": errs}
+        log(f"[hair] vérif {pid}: {'OK' if ok else 'ÉCHEC'} — {m.get('triangles')} tris, "
+            f"infl. max {m.get('max_influences')}, Σw err {m.get('weight_sum_err', 0):.1e}"
+            + ("" if ok else f" — {errs}"))
+    if ANCHORS_JSON.exists():
+        d = json.loads(ANCHORS_JSON.read_text())
+        ok = d.get("count") == hst.N_BRAIDS and d["count"] % 2 == 1
+        out["anchors"] = {"ok": ok, "count": d.get("count")}
+        log(f"[hair] vérif ancres : {d.get('count')} nattes (impair : {d.get('count', 0) % 2 == 1})")
+    return out

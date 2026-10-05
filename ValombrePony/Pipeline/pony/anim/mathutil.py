@@ -61,13 +61,22 @@ def euler_to_mat(ang):
 
 
 def mat_to_euler(m):
-    """Inverse de `euler_to_mat` (branche principale, |flex| < 90°)."""
+    """Inverse de `euler_to_mat`. Deux branches existent (flex et 180° − flex) : on garde celle dont la
+    torsion et l'inclinaison latérale sont les plus petites (les articulations sont surtout des
+    charnières), ce qui permet de relire des flexions > 90° (carpe, jarret replié)."""
     m = np.asarray(m, dtype=np.float64)
     # R = Rz(c) Rx(a) Ry(b) ; R[2,1] = sin(a) ; R[2,0] = -cos(a) sin(b) ; R[2,2] = cos(a) cos(b)
     # R[0,1] = -sin(c) cos(a) ; R[1,1] = cos(c) cos(a)
-    a = np.arcsin(np.clip(m[..., 2, 1], -1.0, 1.0))
-    b = np.arctan2(-m[..., 2, 0], m[..., 2, 2])
-    c = np.arctan2(-m[..., 0, 1], m[..., 1, 1])
+    a1 = np.arcsin(np.clip(m[..., 2, 1], -1.0, 1.0))
+    b1 = np.arctan2(-m[..., 2, 0], m[..., 2, 2])
+    c1 = np.arctan2(-m[..., 0, 1], m[..., 1, 1])
+    a2 = np.where(a1 >= 0, np.pi - a1, -np.pi - a1)
+    b2 = np.arctan2(m[..., 2, 0], -m[..., 2, 2])
+    c2 = np.arctan2(m[..., 0, 1], -m[..., 1, 1])
+    use2 = (np.abs(b2) + np.abs(c2)) < (np.abs(b1) + np.abs(c1))
+    a = np.where(use2, a2, a1)
+    b = np.where(use2, b2, b1)
+    c = np.where(use2, c2, c1)
     return np.stack([a, b, c], axis=-1)
 
 

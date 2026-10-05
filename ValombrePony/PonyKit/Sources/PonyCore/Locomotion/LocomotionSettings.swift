@@ -64,8 +64,8 @@ public struct LocomotionSettings: Sendable, Equatable {
     public var restFadeDuration: Float = 1.0
 
     // Inclinaison et incurvation en virage.
-    /// Inclinaison maximale du tronc (rad) ; θ = atan(v·ω/g) [D, gaits.md §5.3].
-    public var maxLeanAngle: Float = 0.26
+    /// Inclinaison maximale du tronc (rad) ; θ = atan(v·ω/g) [D, gaits.md §5.3], bornée [A].
+    public var maxLeanAngle: Float = 0.2
     public var leanHalfLife: Float = 0.15
     /// Incurvation maximale de l'encolure vers l'intérieur du virage (rad, total) [A].
     public var maxNeckBend: Float = 0.2

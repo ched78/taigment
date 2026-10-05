@@ -22,7 +22,8 @@ from . import template
 PREVIEW_DIR = cv.PREVIEW_DIR / "hair"
 SCRATCH = cv.BUILD_DIR / "hair_cache" / "preview"
 
-COAT = {"brown": (0.085, 0.036, 0.014), "flaxen": (0.20, 0.068, 0.022)}   # bai / alezan, linéaire (aperçu) [A]
+COAT = {"brown": (0.085, 0.036, 0.014), "flaxen": (0.20, 0.068, 0.022),     # bai / alezan, linéaire (aperçu) [A]
+        "black": (0.33, 0.31, 0.29)}                                          # gris (crins noirs)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -292,6 +293,10 @@ def posed_penetration(objs, body, sample=4):
         ev.vertices.foreach_get("co", co)
         co = co.reshape(-1, 3)
         ob.evaluated_get(dg).to_mesh_clear()
+        if "hair_flag" in ob.data.attributes:      # racines et dessous encastrés exclus
+            fl = np.empty(n, np.int32)
+            ob.data.attributes["hair_flag"].data.foreach_get("value", fl)
+            co = co[fl == 0]
         deep = 0
         for p in co[::sample]:
             loc, nn, fi, d = bvh.find_nearest(p.tolist())
@@ -308,7 +313,7 @@ def posed_penetration(objs, body, sample=4):
 # Planches
 # ----------------------------------------------------------------------------------------------
 def render_part_previews(part_ids, colors=("brown", "flaxen"), out_dir=PREVIEW_DIR, views=None, prefer_real=True,
-                         samples=24, resolution=(480, 480), companions=None, sheet=True, log=print):
+                         samples=24, resolution=(480, 480), companions=None, sheet=True, log=print, ext="png"):
     """Rend chaque pièce seule sur le corps (vues profil gauche/droit, 3/4, arrière/face, gros plan) pour chaque
     couleur, et assemble une planche par pièce `<out_dir>/<id>.png`. Renvoie {id: [chemins]}."""
     from . import render
@@ -332,7 +337,115 @@ def render_part_previews(part_ids, colors=("brown", "flaxen"), out_dir=PREVIEW_D
                 labels.append(f"{pid} {col} {vn}")
         if sheet and paths:
             n_per = len(paths) // len(colors)
-            render.contact_sheet(paths, Path(out_dir) / f"{pid}.png", cols=n_per, labels=labels)
+            render.contact_sheet(paths, Path(out_dir) / f"{pid}.{ext}", cols=n_per, labels=labels)
         out[pid] = paths
         log(f"[hair] aperçus {pid} ({kind}) : {len(paths)} images")
     return out, kind
+
+
+# ----------------------------------------------------------------------------------------------
+# Tests de déformation et planche des styles
+# ----------------------------------------------------------------------------------------------
+STYLE_SETS = {
+    "natural": (["mane_natural", "forelock_natural", "tail_natural", "feathers"], "brown"),
+    "braided": (["mane_braided", "forelock_braided", "tail_braided"], "flaxen"),
+    "roached": (["mane_roached", "forelock_natural", "tail_natural"], "black"),
+}
+
+
+def _show_only(objs, ids):
+    for k, o in objs.items():
+        o.hide_render = k not in ids
+
+
+def pose_tests(out_path, sets=("natural", "braided"), prefer_real=True, samples=16, resolution=(400, 400),
+               log=print):
+    """Pose les ensembles de crins (repos, brouter, tête levée, queue relevée), mesure l'étirement des arêtes
+    des crins ET de la peau du corps sous la crinière, et les sommets de crins enfoncés de plus de 4 mm dans le
+    corps posé. Planche `out_path`. Renvoie le rapport chiffré."""
+    import bpy
+
+    from . import render
+
+    arm, body, kind = setup_scene(prefer_real, samples, resolution)
+    J = hs.joints_from_armature(arm)
+    all_ids = sorted({p for s in sets for p in STYLE_SETS[s][0]})
+    objs = load_parts(all_ids, arm)
+    # arêtes du corps proches de la crête (référence pour juger l'étirement de la crinière)
+    from scipy.spatial import cKDTree
+
+    surf = hs.BodySurface(np.array([v.co for v in body.data.vertices]),
+                          np.array([t.vertices[:] for t in body.data.loop_triangles]) if body.data.loop_triangles
+                          else _tris(body.data))
+    crest = hs.crest_line(surf, J)
+    e = np.array([ed.vertices[:] for ed in body.data.edges])
+    rest_b = np.array([v.co for v in body.data.vertices])
+    d, _ = cKDTree(crest["points"]).query(rest_b[e].mean(1))
+    crest_edges = e[d < 0.08]
+    paths, labels, rep = [], [], {"body_source": kind}
+    views = {
+        "rest": [("left", 0, 8, (0, 0.1, 0.85), 3.6), ("3q", -35, 15, (0, 0.2, 0.9), 3.6)],
+        "graze": [("left", 0, 8, (0, 0.4, 0.75), 3.0), ("front34", -50, 12, (0, 0.7, 0.7), 2.2)],
+        "head_up": [("left", 0, 8, (0, 0.1, 0.85), 3.6), ("3q", -35, 15, (0, 0.2, 0.9), 3.6)],
+        "tail_up": [("left", 0, 8, (0, -0.6, 0.9), 2.4), ("back34", 50, 15, (0, -0.8, 0.95), 2.2)],
+    }
+    for sname in sets:
+        ids, col = STYLE_SETS[sname]
+        _show_only(objs, ids)
+        set_colors(col)
+        sub = {k: objs[k] for k in ids}
+        rep[sname] = {}
+        for pose in ("rest", "graze", "head_up", "tail_up"):
+            apply_pose(arm, POSES[pose])
+            dg = bpy.context.evaluated_depsgraph_get()
+            ev = body.evaluated_get(dg).to_mesh()
+            cur_b = np.array([v.co for v in ev.vertices])
+            body.evaluated_get(dg).to_mesh_clear()
+            rb = (np.linalg.norm(cur_b[crest_edges[:, 0]] - cur_b[crest_edges[:, 1]], axis=1)
+                  / np.maximum(np.linalg.norm(rest_b[crest_edges[:, 0]] - rest_b[crest_edges[:, 1]], axis=1), 1e-9))
+            rep[sname][pose] = {"stretch": stretch_report(sub), "penetration": posed_penetration(sub, body),
+                                "body_crest_stretch": {"max": float(rb.max()), "p99": float(np.percentile(rb, 99)),
+                                                       "min": float(rb.min())}}
+            for vn, az, el, tg, dist in views[pose]:
+                camera(az, el, tg, dist)
+                p = render_still(SCRATCH / "pose" / f"{sname}_{pose}_{vn}.png")
+                paths.append(p)
+                labels.append(f"{sname} {pose} {vn}")
+            r = rep[sname][pose]
+            log(f"[hair] pose {sname}/{pose}: étirement crins max " +
+                ", ".join(f"{k}={v['max']:.2f}" for k, v in r["stretch"].items()) +
+                f" | peau crête p99={r['body_crest_stretch']['p99']:.2f} | >4 mm sous la peau : " +
+                ", ".join(f"{k}={v['deeper_than_4mm']}" for k, v in r["penetration"].items()))
+        apply_pose(arm, {})
+    render.contact_sheet(paths, out_path, cols=4, labels=labels)
+    return rep
+
+
+def _tris(me):
+    me.calc_loop_triangles()
+    return np.array([t.vertices[:] for t in me.loop_triangles])
+
+
+def styles_board(out_path, prefer_real=True, samples=32, resolution=(420, 420), log=print):
+    """Planche finale : 3 styles (naturel brun, tressé lavé, rasé noir sur gris) × 4 vues."""
+    from . import render
+
+    arm, body, kind = setup_scene(prefer_real, samples, resolution)
+    J = hs.joints_from_armature(arm)
+    all_ids = sorted({p for s in STYLE_SETS.values() for p in s[0]})
+    objs = load_parts(all_ids, arm)
+    head = tuple(np.array(J["head"][0]) + np.array([0, 0.12, -0.08]))
+    views = [("3/4 avant", -35, 12, (0, 0.15, 0.85), 3.7), ("profil droit", 180, 6, (0, 0.5, 1.1), 2.6),
+             ("3/4 arrière", 135, 14, (0, -0.45, 0.85), 3.2), ("tête", -125, 10, head, 1.05)]
+    paths, labels = [], []
+    for sname, (ids, col) in STYLE_SETS.items():
+        _show_only(objs, ids)
+        set_colors(col)
+        for vn, az, el, tg, dist in views:
+            camera(az, el, tg, dist)
+            p = render_still(SCRATCH / "board" / f"{sname}_{vn.replace(' ', '_').replace('/', '-')}.png")
+            paths.append(p)
+            labels.append(f"{sname} ({col}) - {vn}")
+    render.contact_sheet(paths, out_path, cols=4, labels=labels)
+    log(f"[hair] planche {out_path} ({kind})")
+    return out_path, kind

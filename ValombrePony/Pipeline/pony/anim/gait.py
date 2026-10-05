@@ -204,7 +204,7 @@ def gallop_spec():
     # miroir : PD 0, PG 0,10, AD 0,38, AG 0,50), décalées pour PG = 0 ; appui 0,25–0,30 [U].
     f = dict(duty=0.24, lift=0.17, lift_peak=0.32, carpus=100.0, carpus_peak=0.36, fet_td=-8.0,
              fet_mid=21.0, fet_lo=-24.0, fet_swing=-85.0, coffin_swing=-32.0, bo_start=0.62,
-             bo_angle=52.0, flip=115.0, flip_peak=0.30, dy=-0.10, sw_a=1.45, sw_b=1.6, w_rot_on=0.72)
+             bo_angle=52.0, flip=115.0, flip_peak=0.30, dy=-0.14, sw_a=1.45, sw_b=1.5, w_rot_on=0.72)
     h = dict(duty=0.25, lift=0.14, lift_peak=0.38, fet_td=-6.0, fet_mid=18.0, fet_lo=-24.0,
              fet_swing=-72.0, coffin_swing=-28.0, bo_start=0.62, bo_angle=48.0, flip=90.0,
              flip_peak=0.34, dy=-0.10, sw_a=1.45, sw_b=1.6, w_rot_on=0.72)
@@ -315,6 +315,7 @@ def to_clip(R, p, P):
 class HoofTrack:
     toe: np.ndarray       # (T,3) repère clip
     heel: np.ndarray      # (T,3)
+    quarters: np.ndarray  # (T,2,3)
     stance: np.ndarray    # (T,) bool
     s: np.ndarray         # progression dans la phase courante (0..1)
     u: np.ndarray         # phase du membre (0..1, 0 = poser)
@@ -346,6 +347,7 @@ def hoof_track(sk: Skeleton, limb: str, lg: LimbGait, spec: GaitSpec, t, period,
     neutral = rest + np.array([side * lg.dx, lg.dy, 0.0])
     toe0 = neutral[0]
     heel_off = neutral[5] - neutral[0]
+    quart_off = neutral[3:5] - neutral[0]
     T = period
     t = np.asarray(t, dtype=np.float64)
     ph = t / T - lg.td
@@ -393,6 +395,7 @@ def hoof_track(sk: Skeleton, limb: str, lg: LimbGait, spec: GaitSpec, t, period,
     Ryaw = mu.rz(yaw_all)
     Rp = mu.rx(-pitch)
     heel_w = toe_w + np.einsum("tij,tjk,k->ti", Ryaw, Rp, heel_off)
+    quart_w = toe_w[:, None, :] + np.einsum("tij,tjk,qk->tqi", Ryaw, Rp, quart_off)
     # poids d'orientation en envol
     on = lg.w_rot_on
     wr = 1.0 - 0.97 * np.minimum(mu.smoothstep(s / 0.22), 1.0 - mu.smoothstep((s - on) / (0.97 - on)))
@@ -401,7 +404,8 @@ def hoof_track(sk: Skeleton, limb: str, lg: LimbGait, spec: GaitSpec, t, period,
     R, p = root_motion(t, v_local, omega)
     toe_c = to_clip(R, p, toe_w[:, None, :])[:, 0]
     heel_c = to_clip(R, p, heel_w[:, None, :])[:, 0]
-    return HoofTrack(toe=toe_c, heel=heel_c, stance=stance, s=s, u=u, w_rot=w_rot, toe_world=toe_w)
+    quart_c = to_clip(R, p, quart_w)
+    return HoofTrack(toe=toe_c, heel=heel_c, quarters=quart_c, stance=stance, s=s, u=u, w_rot=w_rot, toe_world=toe_w)
 
 
 # ==============================================================================================
@@ -493,22 +497,59 @@ def world_aligned_to_local(sk: Skeleton, joint: str, pitch, roll, yaw):
     return mu.mat_to_euler(Rloc)
 
 
-def tail_motion(sk, F, t, period, hips_pitch, z, spec: GaitSpec, hips_yaw=None):
-    """Angles (F,10,3) de la queue : port + réponse d'oscillateurs amortis (régime périodique)."""
+def tail_sagittal_to_local(sk: Skeleton, parent_pitch, world_delta):
+    """Queue : angles « monde » sagittaux -> flexions locales.
+
+    parent_pitch (F,) : tangage monde du bassin par rapport au repos (rad, + = croupe… nez en haut) ;
+    world_delta (F,10) : écart de l'angle monde de chaque os de queue par rapport au repos
+    (+ = sens trigonométrique vu de la droite ; pour un os pendant vers l'arrière, − = relevé).
+    flex_i = (θ_i − θ_{i−1}) − (θ_i⁰ − θ_{i−1}⁰) = Δ_i − Δ_{i−1}, avec Δ_{−1} = tangage du bassin."""
+    F = world_delta.shape[0]
+    prev = parent_pitch
+    out = np.zeros((F, len(TAIL)))
+    for i in range(len(TAIL)):
+        out[:, i] = world_delta[:, i] - prev
+        prev = world_delta[:, i]
+    return out
+
+
+# port de queue : poids de relevé le long de la queue (vertèbres caudales 1-4 portent, crins 5-10 pendent)
+TAIL_DOCK = np.array([1.0, 0.85, 0.65, 0.40, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+TAIL_HAIR = np.array([0.0, 0.0, 0.0, 0.0, 0.5, 0.8, 1.0, 1.0, 1.0, 1.0])
+
+
+def tail_motion(sk, F, t, period, pelvis_pitch, z, spec: GaitSpec, hips_yaw=None):
+    """Angles locaux (F,10,3) de la queue [U/A] : tronçon osseux relevé de `tail_lift`, crins pendants
+    (compensent le relevé et le tangage du bassin) inclinés vers l'arrière par la vitesse, plus une
+    petite oscillation retardée (oscillateurs amortis en régime périodique, amplitude bornée).
+    Le runtime ajoute sa propre physique secondaire (SPEC §8) : le clip ne porte que le port de queue."""
     dt = t[1] - t[0]
     out = np.zeros((F, len(TAIL), 3))
-    az = np.gradient(np.gradient(z, dt), dt) if len(z) > 3 else np.zeros_like(z)
+    lift = -spec.tail_lift * D
+    # crins : orientation monde ≈ pendante, inclinée vers l'arrière avec la vitesse [A]
+    v = abs(spec.speed)
+    drag = -min(45.0, 6.0 * v) * D
+    world = np.zeros((F, len(TAIL)))
+    # angle monde du tronçon osseux = tangage du bassin + relevé ; crins : relevé compensé + traînée
+    pp = pelvis_pitch - pelvis_pitch.mean()
     for i in range(len(TAIL)):
-        # port : relevé surtout à la base (vertèbres 1-4), le reste suit la gravité [U]
-        w_base = [1.0, 0.8, 0.55, 0.35, 0.15, 0.08, 0.0, 0.0, 0.0, 0.0][i]
-        lift = -spec.tail_lift * D * w_base       # flexion − = relever (os pointant vers l'arrière/bas)
-        f0 = 3.2 - 0.18 * i                        # fréquence propre décroissante le long de la queue [A]
-        forcing = -(hips_pitch - hips_pitch.mean()) * 0.9 + az / G * 0.10 * spec.tail_gain
-        dyn = damped_response(forcing, dt, f0, 0.35, gain=0.3 + 0.12 * i)
-        out[:, i, 0] = lift + dyn * spec.tail_gain
-        if hips_yaw is not None and spec.tail_swing:
-            lat = damped_response(hips_yaw, dt, f0 * 0.8, 0.4, gain=1.0)
-            out[:, i, 2] = -lat / max(np.abs(hips_yaw).max(), 1e-9) * spec.tail_swing * D * (0.15 + 0.05 * i)
+        dock_part = TAIL_DOCK[i] * (lift + pelvis_pitch)
+        hair_part = TAIL_HAIR[i] * drag + (1.0 - TAIL_HAIR[i]) * (1.0 - TAIL_DOCK[i]) * (lift * 0.4)
+        world[:, i] = dock_part + hair_part
+    # oscillation : réponse amortie au tangage du bassin et à l'accélération verticale, ±6° max [A]
+    az = np.gradient(np.gradient(z, dt), dt) if len(z) > 3 else np.zeros_like(z)
+    forcing = -0.6 * pp + 0.04 * az / G
+    for i in range(len(TAIL)):
+        f0 = 2.6 - 0.12 * i
+        dyn = damped_response(forcing, dt, f0, 0.45, gain=0.4 + 0.08 * i) * spec.tail_gain
+        lim = (2.0 + 0.6 * i) * D
+        world[:, i] += lim * np.tanh(dyn / lim)
+    out[:, :, 0] = tail_sagittal_to_local(sk, pelvis_pitch, world)
+    if hips_yaw is not None and spec.tail_swing:
+        for i in range(len(TAIL)):
+            f0 = 2.0 - 0.1 * i
+            lat = damped_response(hips_yaw, dt, f0, 0.4, gain=1.0)
+            out[:, i, 2] = -lat / max(np.abs(hips_yaw).max(), 1e-9) * spec.tail_swing * D * (0.10 + 0.03 * i)
     return out
 
 
@@ -615,7 +656,10 @@ def make_gait_clip(sk: Skeleton, spec: GaitSpec, verbose=False) -> Clip:
     ang[:, sk.idx("head"), 2] = bend * 0.12
     # --- queue
     # forçage : tangage monde du bassin (tronc + flexion lombo-sacrée) et accélération verticale
-    tail = tail_motion(sk, F, t, T, pitch_tot - (spec.ls_flex * hind_pro) * D, z, spec, hips_yaw=hips_yaw)
+    # tangage monde du bassin (nez en haut +) : tronc + flexion lombo-sacrée (+ = croupe qui s'enroule,
+    # ce qui fait pivoter la base de queue vers le bas)
+    pelvis_pitch = pitch_tot + (spec.ls_flex * hind_pro + spec.ls_flex0) * D
+    tail = tail_motion(sk, F, t, T, pelvis_pitch, z, spec, hips_yaw=hips_yaw)
     for i, jn in enumerate(TAIL):
         ang[:, sk.idx(jn)] = tail[:, i]
         if spec.turn_bend:
@@ -655,7 +699,8 @@ def make_gait_clip(sk: Skeleton, spec: GaitSpec, verbose=False) -> Clip:
         order = list(range(F)) + list(range(F))     # deux passes (démarrage à chaud périodique)
         for n_it, f in enumerate(order):
             inp = LimbFrameInput(
-                toe=tr.toe[f], heel=tr.heel[f], w_rot=float(tr.w_rot[f]), carpus=float(carpus[f]),
+                toe=tr.toe[f], heel=tr.heel[f], quarters=tr.quarters[f], w_rot=float(tr.w_rot[f]),
+                carpus=float(carpus[f]),
                 fetlock_pref=float(fet[f]), coffin_pref=float(coffin[f]), w_fetlock=lg.w_fetlock,
                 w_coffin=0.15 + 0.6 * (1.0 - float(tr.w_rot[f])),
                 ground_clear=0.004 if not tr.stance[f] else -1.0,

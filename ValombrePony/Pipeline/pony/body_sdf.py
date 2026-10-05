@@ -50,7 +50,7 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from . import template
-from .body_sdf_lib import (BIG, F32, BlobBump, Bump, Ellipsoid, Func, Group, Hoof, Loft, RoundBox, RoundCone,
+from .body_sdf_lib import (BIG, F32, BlobBump, Bump, PolyBump, Ellipsoid, Func, Group, Hoof, Loft, RoundBox, RoundCone,
                            Segment, Sphere, VLoft, evaluate, frame_from_axis, gradient, project, ray_surface, smax,
                            smin, smoothstep, unit)
 
@@ -332,8 +332,8 @@ class BodySDF:
         self.lo = root.lo
         self.hi = root.hi
 
-    def __call__(self, P, margin=0.05):
-        return evaluate(self.root, P, margin=margin)
+    def __call__(self, P, margin=0.05, cell=0.08):
+        return evaluate(self.root, P, margin=margin, cell=cell)
 
     def gradient(self, P, eps=4e-4):
         return gradient(lambda Q: self(Q), P, eps)
@@ -367,6 +367,7 @@ class _Builder:
         self.regions = {}
         self.details = []
         self.openings = []
+        self.shoulders = []
 
     # ------------------------------------------------------------------ utilitaires
     def r(self, x):
@@ -419,6 +420,8 @@ class _Builder:
                 root.add("U", parts["ergot"], 0.003)
             ear = self.ear(side, sx)
             root.add("U", ear, 0.012)
+        for sg in self.shoulders:
+            root.add("U", sg, 0.06)
         # reliefs, sillons, creux (après les unions)
         for op, prim, k in self.details:
             root.add(op, prim, k)
@@ -436,8 +439,8 @@ class _Builder:
         # Stations : y, dessus, dessous, demi-largeur, fraction de la largeur max, exposants haut / bas [A]
         S = np.array([
             # y      top    bot     w      wf    nt   nb
-            [0.70, 1.030, 0.875, 0.050, 0.50, 2.0, 2.0],
-            [0.64, 1.120, 0.815, 0.120, 0.46, 1.8, 2.0],
+            [0.66, 1.030, 0.875, 0.050, 0.50, 2.0, 2.0],
+            [0.62, 1.120, 0.815, 0.120, 0.46, 1.8, 2.0],
             [0.54, 1.195, 0.745, 0.160, 0.44, 1.7, 1.9],
             [0.42, 1.235, 0.705, 0.178, 0.42, 1.7, 1.9],
             [0.30, 1.248, 0.690, 0.192, 0.40, 1.8, 1.9],
@@ -450,7 +453,7 @@ class _Builder:
             [-0.50, 1.284, 0.850, 0.196, 0.52, 2.2, 2.0],
             [-0.60, 1.276, 0.910, 0.180, 0.52, 2.1, 2.0],
             [-0.70, 1.238, 0.960, 0.145, 0.52, 2.0, 2.0],
-            [-0.78, 1.175, 1.000, 0.090, 0.50, 2.0, 2.0],
+            [-0.78, 1.175, 1.000, 0.080, 0.50, 2.0, 2.0],
             [-0.83, 1.125, 1.040, 0.030, 0.50, 2.0, 2.0],
         ], float)
         ys, top, bot, w = S[:, 0].copy(), S[:, 1].copy(), S[:, 2].copy(), S[:, 3].copy()
@@ -483,7 +486,7 @@ class _Builder:
         # sacrum / sommet de croupe
         g.add("U", Ellipsoid(self.tp(-0.50, 1.250), self.r([0.055 * tw, 0.20, 0.058])), 0.05)
         # poitrail : masse centrale + pectoraux descendants (V)
-        g.add("U", Ellipsoid(self.tp(0.590, 0.860), self.r([0.095 * tw, 0.085, 0.115])), 0.05)
+        g.add("U", Ellipsoid(self.tp(0.575, 0.865), self.r([0.095 * tw, 0.065, 0.110])), 0.05)
         for sx, side in ((-1.0, "l"), (1.0, "r")):
             a = self.M.pw([("spine_03", 0.5), (f"forearm_{side}", 0.5)], (sx * 0.058 * tw, 0.630, 0.905))
             b = self.M.p(f"forearm_{side}", (sx * 0.102, 0.495, 0.690))
@@ -500,9 +503,9 @@ class _Builder:
             # sillon de la sangle juste derrière le coude
             a = self.tp(0.30, 0.86, 0.19 * tw + 0.006, sx)
             b = self.tp(0.33, 0.70, 0.15 * tw + 0.004, sx)
-            self.details.append(("D", Bump(a, b, self.r(0.022), -self.r(0.0035)), 0.0))
+            self.details.append(("D", Bump(a, b, self.r(0.030), -self.r(0.0025), taper=0.35), 0.0))
             # côtes (visibles si maigre ; très légères sinon)
-            amp = 0.0006 + 0.0045 * max(-fat, 0.0)
+            amp = 0.0003 + 0.0045 * max(-fat, 0.0)
             for i in range(9):
                 y0 = 0.18 - i * 0.052
                 a = self.tp(y0 + 0.015, 1.13, 0.215 * tw, sx)
@@ -528,10 +531,10 @@ class _Builder:
         ax = unit(M.jh("head") - O)
         nm = unit(np.array([0.0, -ax[2], ax[1]]))
         # ligne de crête et ligne du dessous (référence, y-z), attachées aux os de l'encolure [A]
-        crest_ref = [(0.20, 1.282), (0.30, 1.300), (0.38, 1.288), (0.46, 1.312), (0.55, 1.356), (0.64, 1.402),
-                     (0.72, 1.442), (0.79, 1.474), (0.85, 1.494), (0.90, 1.500), (0.95, 1.488)]
-        under_ref = [(0.66, 0.840), (0.69, 0.905), (0.72, 0.980), (0.755, 1.060), (0.79, 1.135), (0.825, 1.200),
-                     (0.855, 1.250), (0.885, 1.285), (0.92, 1.31)]
+        crest_ref = [(0.20, 1.282), (0.30, 1.296), (0.38, 1.280), (0.46, 1.296), (0.55, 1.340), (0.64, 1.392),
+                     (0.72, 1.436), (0.79, 1.468), (0.85, 1.488), (0.90, 1.494), (0.95, 1.480)]
+        under_ref = [(0.615, 0.840), (0.638, 0.910), (0.668, 0.985), (0.705, 1.060), (0.742, 1.130), (0.773, 1.200),
+                     (0.795, 1.255), (0.812, 1.296), (0.830, 1.338), (0.848, 1.375), (0.868, 1.440)]
 
         def attach(yz):
             y, z = yz
@@ -564,12 +567,12 @@ class _Builder:
 
         L = np.linalg.norm(M.jh("head") - O)
         L0 = np.linalg.norm(M.rh("head") - O_ref)
-        s_ref = np.array([0.06, 0.12, 0.18, 0.24, 0.30, 0.36, 0.42, 0.48, 0.54, 0.60, 0.645])
-        # demi-largeurs [A] (base large fondue dans les épaules → nuque)
-        w_ref = np.array([0.185, 0.165, 0.140, 0.118, 0.103, 0.093, 0.086, 0.080, 0.076, 0.074, 0.072])
-        wf = np.array([0.42, 0.42, 0.42, 0.42, 0.42, 0.42, 0.44, 0.46, 0.48, 0.50, 0.52])
-        nt = np.array([1.70, 1.70, 1.65, 1.65, 1.65, 1.65, 1.70, 1.75, 1.85, 1.95, 2.0])
-        nb = np.array([2.00, 2.00, 2.00, 2.00, 2.00, 2.05, 2.10, 2.10, 2.10, 2.10, 2.1])
+        s_ref = np.array([0.06, 0.12, 0.18, 0.24, 0.30, 0.36, 0.42, 0.48, 0.53, 0.57, 0.62])
+        # demi-largeurs [A] (base fondue dans les épaules → nuque)
+        w_ref = np.array([0.150, 0.140, 0.128, 0.116, 0.105, 0.096, 0.089, 0.082, 0.077, 0.072, 0.060])
+        wf = np.array([0.42, 0.42, 0.42, 0.42, 0.42, 0.43, 0.45, 0.48, 0.52, 0.55, 0.55])
+        nt = np.array([2.10, 2.05, 1.95, 1.85, 1.78, 1.75, 1.75, 1.80, 1.90, 2.0, 2.0])
+        nb = np.array([1.90, 1.90, 1.95, 2.00, 2.00, 2.05, 2.10, 2.10, 2.10, 2.1, 2.1])
         ss, tops, bots, keep = [], [], [], []
         for i0, s0 in enumerate(s_ref):
             s = s0 * L / L0
@@ -608,22 +611,15 @@ class _Builder:
                     if hit is not None:
                         store.append(hit)
             if len(pts_j) >= 3:
-                pts_j = np.array(pts_j)
-                for i in range(len(pts_j) - 1):
-                    a = pts_j[i] + np.array([sx * 0.008, 0, 0])
-                    b = pts_j[i + 1] + np.array([sx * 0.008, 0, 0])
-                    rr = self.r(0.0135)
-                    self.details.append(("S", Segment(a, b, (rr, rr), (rr * 1.5, rr * 1.5)),
-                                         0.012 - 0.004 * p.muscle))
+                self.details.append(("D", PolyBump(np.array(pts_j), self.r(0.017),
+                                                   -self.r(0.0032 + 0.002 * p.muscle), taper=0.2), 0.0))
             if len(pts_b) >= 3:
-                pts_b = np.array(pts_b)
-                for i in range(len(pts_b) - 1):
-                    self.details.append(("D", Bump(pts_b[i], pts_b[i + 1], self.r(0.020),
-                                                   self.r(0.0035 + 0.003 * p.muscle), taper=0.05), 0.0))
+                self.details.append(("D", PolyBump(np.array(pts_b), self.r(0.026),
+                                                   self.r(0.0018 + 0.003 * p.muscle), taper=0.25), 0.0))
             if len(pts_s) >= 3:
                 pts_s = np.array(pts_s)
-                self.details.append(("D", Bump(pts_s[1], pts_s[3], self.r(0.035),
-                                               self.r(0.003 + 0.003 * p.muscle)), 0.0))
+                self.details.append(("D", Bump(pts_s[1], pts_s[3], self.r(0.045),
+                                               self.r(0.002 + 0.003 * p.muscle)), 0.0))
         return g
 
     # ------------------------------------------------------------------ tête
@@ -638,21 +634,23 @@ class _Builder:
         dn = unit(self.hv(0.0, 1.0))
         # Profil (s, dessus, dessous, demi-largeur, wf, nt, nb) dans le repère tête [A]
         T = np.array([
-            [-0.085, 0.030, -0.092, 0.070, 0.55, 2.0, 2.0],
-            [-0.045, 0.058, -0.118, 0.076, 0.55, 2.2, 2.0],
-            [0.000, 0.073, -0.136, 0.081, 0.50, 2.4, 2.4],
-            [0.050, 0.083, -0.147, 0.087, 0.44, 2.5, 2.6],
-            [0.100, 0.088, -0.149, 0.091, 0.42, 2.6, 2.6],
-            [0.150, 0.090, -0.145, 0.092, 0.48, 2.6, 2.6],
-            [0.200, 0.088, -0.136, 0.087, 0.55, 2.6, 2.4],
-            [0.250, 0.082, -0.123, 0.077, 0.55, 2.6, 2.3],
-            [0.300, 0.074, -0.110, 0.066, 0.55, 2.4, 2.2],
-            [0.350, 0.065, -0.099, 0.058, 0.52, 2.4, 2.2],
-            [0.400, 0.056, -0.093, 0.054, 0.50, 2.3, 2.2],
-            [0.440, 0.048, -0.090, 0.055, 0.48, 2.2, 2.2],
-            [0.470, 0.037, -0.082, 0.053, 0.46, 2.2, 2.2],
-            [0.495, 0.020, -0.062, 0.043, 0.45, 2.0, 2.0],
-            [0.510, 0.000, -0.036, 0.020, 0.50, 2.0, 2.0],
+            [-0.140, -0.075, -0.115, 0.040, 0.50, 2.0, 2.0],
+            [-0.085, 0.004, -0.078, 0.062, 0.55, 2.0, 2.0],
+            [-0.045, 0.046, -0.072, 0.071, 0.58, 2.2, 2.0],
+            [0.000, 0.073, -0.082, 0.078, 0.60, 2.4, 2.1],
+            [0.035, 0.080, -0.105, 0.083, 0.62, 2.5, 2.2],
+            [0.065, 0.085, -0.136, 0.088, 0.63, 2.5, 2.3],
+            [0.100, 0.088, -0.146, 0.091, 0.64, 2.6, 2.3],
+            [0.150, 0.090, -0.142, 0.093, 0.64, 2.6, 2.3],
+            [0.200, 0.088, -0.134, 0.088, 0.62, 2.6, 2.3],
+            [0.250, 0.082, -0.123, 0.077, 0.60, 2.6, 2.3],
+            [0.300, 0.074, -0.110, 0.070, 0.55, 2.4, 2.2],
+            [0.350, 0.065, -0.100, 0.062, 0.52, 2.4, 2.2],
+            [0.400, 0.056, -0.095, 0.057, 0.50, 2.3, 2.2],
+            [0.440, 0.051, -0.095, 0.056, 0.48, 2.2, 2.2],
+            [0.470, 0.042, -0.090, 0.055, 0.46, 2.2, 2.2],
+            [0.492, 0.022, -0.072, 0.046, 0.45, 2.0, 2.0],
+            [0.500, 0.004, -0.050, 0.028, 0.50, 2.0, 2.0],
         ], float)
         s, top, bot, w = T[:, 0].copy(), T[:, 1].copy(), T[:, 2].copy(), T[:, 3].copy()
         # profil de chanfrein : concave (dished) / busqué (roman)
@@ -676,37 +674,39 @@ class _Builder:
         for sx in (-1.0, 1.0):
             # ganaches (masséters) : larges et plates
             Rm = np.stack([unit(self.hv(1.0, 0.35)), unit(self.hv(-0.35, 1.0)), X], 1)
-            g.add("U", Ellipsoid(hp(0.085, -0.088, sx * 0.068), self.r([0.088 * (1 + 0.04 * mus), 0.066, 0.024]), Rm),
-                  0.025)
+            g.add("U", Ellipsoid(hp(0.100, -0.085, sx * 0.064), self.r([0.076 * (1 + 0.04 * mus), 0.076, 0.027]), Rm),
+                  0.03)
+            # angle de la mandibule (contour arrondi de la ganache)
+            g.add("U", Ellipsoid(hp(0.072, -0.118, sx * 0.058), self.r([0.048, 0.044, 0.022]), Rm), 0.025)
             # bord ventral de la mandibule (rami)
             a = hp(0.07, -0.140, sx * 0.050)
             b = hp(0.36, -0.092, sx * 0.034)
             g.add("U", Segment(a, b, (self.r(0.016), self.r(0.012)), (self.r(0.012), self.r(0.010)), lat=X), 0.02)
             # arcade sourcilière (processus supra-orbitaire)
-            a = hp(0.115, 0.064, sx * 0.058)
-            b = hp(0.205, 0.050, sx * 0.080)
-            g.add("U", Segment(a, b, (self.r(0.013), self.r(0.010)), (self.r(0.012), self.r(0.009)), lat=dn), 0.016)
+            a = hp(0.120, 0.062, sx * 0.060)
+            b = hp(0.200, 0.050, sx * 0.076)
+            g.add("U", Segment(a, b, (self.r(0.012), self.r(0.009)), (self.r(0.011), self.r(0.008)), lat=dn), 0.022)
             # arcade zygomatique derrière l'œil (bord orbitaire caudal) -> rejoint la crête faciale
             a = hp(0.125, 0.030, sx * 0.080)
             b = hp(0.185, -0.012, sx * 0.090)
             g.add("U", Segment(a, b, (self.r(0.011), self.r(0.010)), (self.r(0.010), self.r(0.010)), lat=X), 0.016)
             # crête faciale (zygomatique)
-            self.details.append(("D", Bump(hp(0.165, -0.020, sx * 0.090), hp(0.300, -0.042, sx * 0.068),
-                                           self.r(0.0065), self.r(0.0045 + 0.002 * mus), taper=0.2), 0.0))
+            self.details.append(("D", Bump(hp(0.175, -0.024, sx * 0.090), hp(0.275, -0.040, sx * 0.074),
+                                           self.r(0.009), self.r(0.0028 + 0.002 * mus), taper=0.35), 0.0))
             # salière (fosse supra-orbitaire)
-            self.details.append(("S", Ellipsoid(hp(0.095, 0.058, sx * 0.075), self.r([0.024, 0.017, 0.011]),
-                                                Rh), 0.012))
+            self.details.append(("D", BlobBump(hp(0.100, 0.052, sx * 0.080), self.r(np.array([0.026, 0.014, 0.010])),
+                                               -self.r(0.0045 + 0.004 * max(-p.fat, 0)), Rh), 0.0))
             # sillon entre masséter et joue (bord rostral du masséter)
             self.details.append(("D", Bump(hp(0.170, -0.040, sx * 0.086), hp(0.200, -0.125, sx * 0.072),
                                            self.r(0.008), -self.r(0.0025), taper=0.3), 0.0))
         # auge (espace intermandibulaire)
-        self.details.append(("S", Segment(hp(0.000, -0.178), hp(0.300, -0.122),
-                                          (self.r(0.030), self.r(0.020)), (self.r(0.032), self.r(0.022)), lat=X),
+        self.details.append(("S", Segment(hp(0.080, -0.172), hp(0.330, -0.118),
+                                          (self.r(0.030), self.r(0.017)), (self.r(0.020), self.r(0.016)), lat=X),
                              0.02))
         # lèvres et menton
         self.mouth_parts(g)
         # nuque / toupet : légère crête nucale
-        g.add("U", Ellipsoid(hp(-0.030, 0.050), self.r([0.035, 0.030, 0.060]), Rh), 0.03)
+        g.add("U", Ellipsoid(hp(-0.025, 0.040), self.r([0.032, 0.026, 0.055]), Rh), 0.035)
         # yeux, naseaux (et ouvertures)
         for side, sx in (("l", -1.0), ("r", 1.0)):
             self.eye(g, side, sx)
@@ -775,17 +775,20 @@ class _Builder:
         C = M.jh(f"eye_{side}")
         ax = unit(self.hv(1.0, 0.0))
         dn = unit(self.hv(0.0, 1.0))
-        lat = np.array([sx, 0.0, 0.0])
-        beta, gam = math.radians(33.0), math.radians(25.0)  # [A] axe optique : 33° rostral, relevé de 25°
-        r = unit(math.cos(gam) * ax + math.sin(gam) * dn)
-        gdir = unit(math.cos(beta) * lat + math.sin(beta) * r)
-        h = unit(r - np.dot(r, gdir) * gdir)
+        # axe optique = direction de l'os de la paupière supérieure (gabarit) ; h = axe de la fente (vers
+        # le canthus médial) = X local de l'os (règle de roulis) au signe près ; v = « haut » de la fente.
+        gdir = unit(M.jt(f"eyelid_upper_{side}") - C)
+        Xw = np.array([1.0, 0.0, 0.0])
+        h = unit(Xw - np.dot(Xw, gdir) * gdir)
+        if np.dot(h, ax) < 0:
+            h = -h
         v = unit(np.cross(h, gdir))
         if np.dot(v, dn) < 0:
             v = -v
-        Rg, Ri, Ro = self.r(0.0195), self.r(0.0215), self.r(0.0265)
+        # globe : sclère R 19 mm + cornée bombée (apex 20,4 mm) ; coque palpébrale R_in 20,8 / R_out 25 mm
+        Rg, Ri, Ro = self.r(0.0190), self.r(0.0208), self.r(0.0250)
         ef = EyeFeature(side=side, C=C, g=gdir, h=h, v=v, R_globe=Rg, R_in=Ri, R_out=Ro,
-                        a_lat=-0.80, a_med=0.84, b_up=0.47, b_lo=0.33)
+                        a_lat=-0.95, a_med=1.00, b_up=0.58, b_lo=0.40)
         self.features[f"eye_{side}"] = ef
         # coque palpébrale (sphère) fondue dans la tête
         g.add("U", Sphere(C, Ro), 0.011)
@@ -832,14 +835,20 @@ class _Builder:
             if Nc is None:
                 Nc = o + 0.05 * dirn
             n_out = unit(np.asarray(_num_grad(fn, Nc), float))
-            e1 = unit(0.88 * dn - 0.38 * ax + 0.28 * lat)
+            e1 = unit(0.92 * dn - 0.30 * ax + 0.22 * lat)
             e1 = unit(e1 - np.dot(e1, n_out) * n_out)
             e2 = unit(np.cross(n_out, e1))
-            a1 = self.r(0.0185 * (1 + 0.22 * fl + 0.08 * mw))
-            a2 = self.r(0.0072 * (1 + 0.85 * fl + 0.25 * mw))
-            # aile du naseau (cartilage alaire) : bourrelet médial-rostral
-            g.add("U", Ellipsoid(Nc + 0.004 * n_out - 0.010 * ax + 0.002 * dn,
-                                 self.r([0.012, 0.022, 0.012]) * (1 + 0.15 * fl)), 0.012)
+            if np.dot(e2, ax) < 0:
+                e2 = -e2
+            a1 = self.r(0.0215 * (1 + 0.20 * fl + 0.08 * mw))
+            a2 = self.r(0.0085 * (1 + 0.80 * fl + 0.25 * mw))
+            # renflement du naseau (cartilage alaire + diverticule) autour de l'ouverture
+            Rn = np.stack([e1, e2, n_out], 1)
+            g.add("U", Ellipsoid(Nc - 0.006 * n_out + 0.004 * e2, self.r(np.array([0.030, 0.020, 0.012]) *
+                                                                         (1 + 0.12 * fl)), Rn), 0.014)
+            # aile (bord médial-rostral de l'ouverture, en « C »)
+            g.add("U", Ellipsoid(Nc + 0.6 * a2 * e2 + 0.002 * n_out - 0.004 * e1,
+                                 self.r(np.array([0.016, 0.0055, 0.006]) * (1 + 0.1 * fl)), Rn), 0.005)
             # conduit : anneaux de l'ouverture vers le fond (vers la nuque et la ligne médiane)
             inward = unit(-n_out * 0.75 - ax * 0.55 - 0.15 * lat)
             ring_c = [Nc + 0.012 * n_out, Nc - 0.006 * n_out, Nc + 0.022 * inward, Nc + 0.040 * inward,
@@ -916,8 +925,9 @@ class _Builder:
     # Profils du membre antérieur gauche (référence) : z, avant (y), arrière (y), latéral |x|, médial |x|, exposant,
     # os d'attache. [A] calés sur les joints du gabarit et anatomy.md (§1.3, §3.3).
     FORE_PROFILE = [
-        (0.900, 0.600, 0.328, 0.170, 0.105, 2.2, "upperarm"),
-        (0.860, 0.588, 0.330, 0.188, 0.100, 2.2, "upperarm"),
+        (0.960, 0.575, 0.345, 0.140, 0.100, 2.2, "upperarm"),
+        (0.900, 0.590, 0.330, 0.172, 0.103, 2.2, "upperarm"),
+        (0.860, 0.580, 0.330, 0.188, 0.100, 2.2, "upperarm"),
         (0.810, 0.555, 0.337, 0.193, 0.098, 2.2, "upperarm"),
         (0.760, 0.515, 0.343, 0.190, 0.095, 2.2, "forearm"),
         (0.710, 0.492, 0.356, 0.187, 0.093, 2.2, "forearm"),
@@ -925,9 +935,9 @@ class _Builder:
         (0.560, 0.474, 0.377, 0.173, 0.093, 2.3, "forearm"),
         (0.480, 0.465, 0.385, 0.165, 0.092, 2.3, "forearm"),
         (0.420, 0.458, 0.390, 0.159, 0.093, 2.4, "forearm"),
-        (0.380, 0.459, 0.388, 0.159, 0.092, 2.7, "front_cannon"),
-        (0.350, 0.459, 0.381, 0.160, 0.091, 2.9, "front_cannon"),
-        (0.315, 0.455, 0.388, 0.155, 0.096, 2.5, "front_cannon"),
+        (0.380, 0.459, 0.388, 0.159, 0.092, 2.45, "front_cannon"),
+        (0.350, 0.459, 0.383, 0.160, 0.091, 2.5, "front_cannon"),
+        (0.315, 0.455, 0.388, 0.155, 0.096, 2.4, "front_cannon"),
         (0.280, 0.452, 0.391, 0.148, 0.101, 2.3, "front_cannon"),
         (0.220, 0.451, 0.390, 0.146, 0.102, 2.3, "front_cannon"),
         (0.175, 0.452, 0.386, 0.146, 0.100, 2.2, "front_cannon"),
@@ -939,17 +949,17 @@ class _Builder:
     ]
     HIND_PROFILE = [
         (1.120, -0.460, -0.742, 0.130, 0.000, 2.0, "hips"),
-        (1.060, -0.420, -0.776, 0.172, 0.000, 2.0, "hips"),
-        (1.000, -0.400, -0.786, 0.192, 0.000, 2.0, "thigh"),
-        (0.920, -0.376, -0.778, 0.204, 0.012, 2.1, "thigh"),
-        (0.850, -0.361, -0.762, 0.206, 0.030, 2.2, "thigh"),
+        (1.060, -0.420, -0.750, 0.172, 0.000, 2.0, "hips"),
+        (1.000, -0.400, -0.758, 0.192, 0.000, 2.0, "thigh"),
+        (0.920, -0.376, -0.756, 0.204, 0.012, 2.1, "thigh"),
+        (0.850, -0.361, -0.745, 0.206, 0.030, 2.2, "thigh"),
         (0.780, -0.356, -0.738, 0.199, 0.052, 2.2, "gaskin"),
         (0.720, -0.378, -0.712, 0.189, 0.068, 2.2, "gaskin"),
         (0.650, -0.425, -0.694, 0.177, 0.080, 2.2, "gaskin"),
         (0.580, -0.480, -0.692, 0.164, 0.084, 2.2, "gaskin"),
         (0.520, -0.525, -0.700, 0.158, 0.084, 2.3, "gaskin"),
-        (0.470, -0.554, -0.712, 0.157, 0.083, 2.5, "hind_cannon"),
-        (0.420, -0.578, -0.688, 0.158, 0.082, 2.6, "hind_cannon"),
+        (0.470, -0.554, -0.712, 0.157, 0.083, 2.35, "hind_cannon"),
+        (0.420, -0.578, -0.688, 0.158, 0.082, 2.4, "hind_cannon"),
         (0.380, -0.587, -0.672, 0.146, 0.094, 2.4, "hind_cannon"),
         (0.320, -0.589, -0.664, 0.142, 0.096, 2.3, "hind_cannon"),
         (0.250, -0.589, -0.656, 0.139, 0.095, 2.3, "hind_cannon"),
@@ -1002,24 +1012,37 @@ class _Builder:
         leg = self.leg_loft(side, sx, self.FORE_PROFILE, scale)
         g.add("U", leg)
         latv = np.array([sx, 0.0, 0.0])
+        sg = Group(f"shoulder_{side}")
+        self.shoulders.append(sg)
         # épaule : plaque (omoplate + supra/infra-épineux + deltoïde), en grande partie noyée dans le thorax
         S0 = P_("scapula", 0.070, 0.330, 1.200)
         Sh = P_("upperarm", 0.160, 0.580, 0.890)
         e = unit(Sh - S0)
         wv = unit(np.cross(e, latv))
         Rsc = np.stack([e, wv, unit(np.cross(e, wv))], 1)
-        c = 0.52 * (S0 + Sh) + latv * (0.010 + dl + 0.004 * max(fat, 0)) * self.k - wv * 0.012 * self.k
-        g.add("U", Ellipsoid(c, self.r(np.array([0.245, 0.115, 0.050]) * [1, 1, rm]), Rsc), 0.07)
+        c = 0.46 * S0 + 0.54 * Sh + latv * (-0.013 + dl + 0.004 * max(fat, 0)) * self.k - wv * 0.012 * self.k
+        sg.add("U", Ellipsoid(c, self.r(np.array([0.205, 0.112, 0.050]) * [1, 1, rm]), Rsc))
+        # brachio-céphalique + base de l'encolure : comble la transition encolure → pointe de l'épaule
+        a = P_("upperarm", 0.118 + dl, 0.598, 0.950)
+        b2 = M.p("neck_02", L(0.062, 0.705, 1.160))
+        e3 = unit(b2 - a)
+        w3 = unit(np.cross(e3, latv))
+        Rb = np.stack([e3, w3, unit(np.cross(e3, w3))], 1)
+        sg.add("U", Ellipsoid(0.55 * a + 0.45 * b2, self.r(np.array([0.150, 0.070, 0.048]) * [1, 1, rm]), Rb), 0.05)
+        # trapèze / rhomboïde : relie la crête de l'encolure au garrot et au cartilage de l'omoplate
+        a = self.tp(0.250, 1.215, 0.050, sx)
+        b2 = M.p("neck_02", L(0.058, 0.560, 1.250))
+        sg.add("U", Segment(a, b2, (self.r(0.050), self.r(0.045)), (self.r(0.060), self.r(0.050))), 0.05)
         # pointe de l'épaule (tubercule majeur)
-        g.add("U", Ellipsoid(P_("upperarm", 0.148 + dl, 0.612, 0.895), self.r([0.030, 0.036, 0.042])), 0.035)
+        sg.add("U", Ellipsoid(P_("upperarm", 0.140 + dl, 0.586, 0.895), self.r([0.030, 0.032, 0.042])), 0.04)
         # triceps (noyé, relief arrière du bras)
         a = P_("scapula", 0.118 + dl, 0.385, 1.020)
         b = P_("upperarm", 0.150 + dl, 0.372, 0.790)
         e2 = unit(b - a)
         w2 = unit(np.cross(e2, latv))
         Rt = np.stack([e2, w2, unit(np.cross(e2, w2))], 1)
-        g.add("U", Ellipsoid(0.5 * (a + b) + latv * 0.004 * self.k, self.r(np.array([0.150, 0.080, 0.048]) * [1, rm, rm]),
-                             Rt), 0.05)
+        sg.add("U", Ellipsoid(0.5 * (a + b) + latv * 0.004 * self.k, self.r(np.array([0.150, 0.080, 0.048]) * [1, rm, rm]),
+                              Rt), 0.05)
         # épine de l'omoplate (crête discrète) et sillon caudal du deltoïde
         amp = self.r(0.0020 + 0.0030 * mus - 0.0015 * max(fat, 0))
         self.details.append(("D", Bump(0.80 * S0 + 0.20 * Sh + latv * 0.055 * self.k,
@@ -1035,7 +1058,7 @@ class _Builder:
         self.details.append(("D", Bump(P_("forearm", 0.188, 0.420, 0.660), P_("forearm", 0.162, 0.420, 0.450),
                                        self.r(0.007), -self.r(0.0018 + 0.002 * mus)), 0.0))
         # genou : os accessoire du carpe (arrière-latéral), face antérieure plate
-        g.add("U", Ellipsoid(P_("front_cannon", 0.130, 0.383, 0.372), self.r(np.array([0.012, 0.016, 0.020]) * rb)), 0.012)
+        g.add("U", Ellipsoid(P_("front_cannon", 0.129, 0.386, 0.372), self.r(np.array([0.011, 0.012, 0.018]) * rb)), 0.016)
         # sillon entre os du canon et tendons (ligament suspenseur)
         for sgn in (-1.0, 1.0):
             off = 0.0235 if sgn > 0 else -0.0225
@@ -1058,7 +1081,7 @@ class _Builder:
         Rc = np.stack([latv, np.array([0, 1.0, 0]), np.array([0, 0, 1.0])], 1)
         chestnut.add("U", Ellipsoid(P_("forearm", 0.0935, 0.420, 0.455), self.r([0.0060, 0.0120, 0.020]), Rc))
         ergot = Group(f"ergot_f{side}")
-        ergot.add("U", Ellipsoid(P_("front_pastern", 0.115, 0.373, 0.112), self.r([0.008, 0.0065, 0.0075])))
+        ergot.add("U", Ellipsoid(P_("front_pastern", 0.115, 0.3825, 0.110), self.r([0.0095, 0.0062, 0.0085])))
         self.regions[f"fore_{side}"] = g
         self.regions[f"hoof_f{side}"] = hoof
         self.regions[f"chestnut_f{side}"] = chestnut
@@ -1098,7 +1121,7 @@ class _Builder:
         clen = 0.5 * np.linalg.norm(front_top - back_top)
         wtop = W0 - flare * 0.5 * (Ht + Hh)
         Rc = np.stack([ev, lat, nrm], 1)
-        hf = dict(corona_c=cc + nrm * 0.004 * self.k, corona_r=np.array([clen + 0.003, wtop + 0.0025, 0.0085 * self.k]),
+        hf = dict(corona_c=cc + nrm * 0.003 * self.k, corona_r=np.array([clen + 0.0025, wtop + 0.002, 0.0065 * self.k]),
                   corona_R=Rc)
         self.features[f"hoof_{'f' if front else 'h'}{side}"] = HoofFeature(
             leg=("f" if front else "h") + side, O=O, fwd=fwd, coronet_toe=Ht, coronet_heel=Hh, Lf=Lf, Lb=Lb, W0=W0)
@@ -1127,19 +1150,22 @@ class _Builder:
 
         g.add("U", self.leg_loft(side, sx, self.HIND_PROFILE, scale))
         # fessiers (croupe ronde), noyés
-        g.add("U", Ellipsoid(M.p("hips", L(0.088 + dl * 0.5, -0.500, 1.175)),
-                             self.r(np.array([0.110 * tw, 0.245, 0.112]) * [rm, 1, rm * (1 + 0.04 * fat)])), 0.07)
+        cg = Group(f"croup_{side}")
+        self.shoulders.append(cg)
+        cg.add("U", Ellipsoid(M.p("hips", L(0.088 + dl * 0.5, -0.500, 1.175)),
+                              self.r(np.array([0.110 * tw, 0.245, 0.112]) * [rm, 1, rm * (1 + 0.04 * fat)])))
         # pointe de la hanche (tuber coxae)
         ph = 1.0 + 0.30 * max(-fat, 0.0)
         g.add("U", Ellipsoid(M.p("hips", L(0.188 + dl, -0.355, 1.150)), self.r(np.array([0.034, 0.042, 0.032]) * ph)),
               0.045 - 0.02 * max(-fat, 0))
         # tenseur du fascia lata (de la pointe de la hanche vers le grasset), noyé
-        a = M.p("hips", L(0.185 + dl, -0.365, 1.110))
-        b = P_("thigh", 0.180 + dl, -0.385, 0.860)
-        g.add("U", Segment(a, b, (self.r(0.026), self.r(0.026)), (self.r(0.040 * rm), self.r(0.046 * rm)), lat=latv),
-              0.05)
-        # grasset (rotule)
-        g.add("U", Ellipsoid(P_("gaskin", 0.165, -0.378, 0.775), self.r(np.array([0.034, 0.030, 0.042]) * rb)), 0.035)
+        a = M.p("hips", L(0.178 + dl, -0.365, 1.110))
+        b = P_("thigh", 0.168 + dl, -0.380, 0.880)
+        g.add("U", Segment(a, b, (self.r(0.026), self.r(0.024)), (self.r(0.038 * rm), self.r(0.036 * rm)), lat=latv),
+              0.06)
+        # grasset (rotule) : relief discret
+        self.details.append(("D", BlobBump(P_("gaskin", 0.175, -0.372, 0.780), self.r(np.array([0.022, 0.020, 0.030])),
+                                           self.r(0.004 * rb)), 0.0))
         # sillon du biceps fémoral / semi-tendineux (face latérale de la cuisse)
         self.details.append(("D", Bump(M.p("hips", L(0.150, -0.690, 1.060)), P_("gaskin", 0.168, -0.630, 0.720),
                                        self.r(0.011), -self.r(0.0025 + 0.003 * mus), taper=0.3), 0.0))
@@ -1175,7 +1201,7 @@ class _Builder:
         Rc = np.stack([latv, np.array([0, 1.0, 0]), np.array([0, 0, 1.0])], 1)
         chestnut.add("U", Ellipsoid(P_("hind_cannon", 0.0935, -0.622, 0.370), self.r([0.0055, 0.0110, 0.016]), Rc))
         ergot = Group(f"ergot_h{side}")
-        ergot.add("U", Ellipsoid(P_("hind_pastern", 0.110, -0.658, 0.118), self.r([0.008, 0.0065, 0.0075])))
+        ergot.add("U", Ellipsoid(P_("hind_pastern", 0.110, -0.6545, 0.118), self.r([0.0095, 0.0062, 0.0085])))
         if fat > 0:
             self.details.append(("D", BlobBump(M.p("hips", L(0.060, -0.700, 1.215)),
                                                self.r(np.array([0.040, 0.06, 0.04])), self.r(0.010 * fat)), 0.0))
@@ -1223,9 +1249,9 @@ def _num_grad(fn, p, eps=5e-4):
 def mesh_narrowband(sdf, h=0.004, lo=None, hi=None, block=8, superblock=8, log=print):
     """Maillage de l'iso-surface 0 par marching cubes (scikit-image) en bande étroite.
 
-    1) grille grossière (pas h·block) ; 2) blocs fins évalués seulement près de la surface ;
-    3) marching cubes par super-bloc (block·superblock cellules), sommets fusionnés aux frontières.
-    Renvoie (V (n,3) float64, F (m,3) int64).
+    1) grille grossière (pas h·block) ; 2) échantillons fins évalués une seule fois (index global) dans
+    les blocs proches de la surface ; 3) marching cubes par super-bloc en espace d'indices, sommets
+    fusionnés exactement aux frontières. Renvoie (V (n,3) float64, F (m,3) int64), maillage fermé.
     """
     import time
 
@@ -1237,84 +1263,84 @@ def mesh_narrowband(sdf, h=0.004, lo=None, hi=None, block=8, superblock=8, log=p
     lo[2] = min(lo[2], -2 * h)
     hc = h * block
     nc = np.ceil((hi - lo) / hc).astype(int) + 1
+    nf = (nc - 1) * block + 1                      # nombre d'échantillons fins par axe
     gx = [lo[i] + hc * np.arange(nc[i]) for i in range(3)]
     G = np.stack(np.meshgrid(*gx, indexing="ij"), -1).reshape(-1, 3)
-    dc = sdf(G, margin=0.12).reshape(nc)
+    dc = sdf(G, margin=0.12, cell=0.30).reshape(nc)
     t1 = time.perf_counter()
-    # blocs actifs : un coin au moins proche de la surface
     thr = hc * 1.9
     near = np.abs(dc) < thr
     sgn = dc > 0
     act = np.zeros(nc - 1, bool)
-    for dx in (0, 1):
-        for dy in (0, 1):
-            for dz in (0, 1):
-                act |= near[dx:nc[0] - 1 + dx, dy:nc[1] - 1 + dy, dz:nc[2] - 1 + dz]
     mixed = np.zeros(nc - 1, bool)
     s0 = sgn[:-1, :-1, :-1]
     for dx in (0, 1):
         for dy in (0, 1):
             for dz in (0, 1):
-                mixed |= sgn[dx:nc[0] - 1 + dx, dy:nc[1] - 1 + dy, dz:nc[2] - 1 + dz] != s0
+                sl = (slice(dx, nc[0] - 1 + dx), slice(dy, nc[1] - 1 + dy), slice(dz, nc[2] - 1 + dz))
+                act |= near[sl]
+                mixed |= sgn[sl] != s0
     act |= mixed
-    nb = act.sum()
-    log(f"[mesh] grille grossière {tuple(nc)} en {t1 - t0:.1f}s ; blocs actifs {nb}")
+    blocks = np.argwhere(act)
+    log(f"[mesh] grille grossière {tuple(int(v) for v in nc)} en {t1 - t0:.1f}s ; blocs actifs {len(blocks)}")
+    # échantillons fins uniques (index global)
+    lx = np.arange(block + 1)
+    LL = np.stack(np.meshgrid(lx, lx, lx, indexing="ij"), -1).reshape(-1, 3)
+    keys = []
+    for chunk in np.array_split(blocks, max(1, len(blocks) // 2000)):
+        ijk = (chunk[:, None, :] * block + LL[None, :, :]).reshape(-1, 3).astype(np.int64)
+        keys.append((ijk[:, 0] * nf[1] + ijk[:, 1]) * nf[2] + ijk[:, 2])
+    keys = np.unique(np.concatenate(keys))
+    kk = keys.copy()
+    k2 = kk % nf[2]
+    kk //= nf[2]
+    k1 = kk % nf[1]
+    k0 = kk // nf[1]
+    P = lo + np.stack([k0, k1, k2], 1) * h
+    vals = sdf(P, margin=4 * h + 0.01).astype(np.float32)
+    t2 = time.perf_counter()
+    log(f"[mesh] {len(keys) / 1e6:.2f} M échantillons fins évalués en {t2 - t1:.1f}s")
     # super-blocs
     nsb = np.ceil((nc - 1) / superblock).astype(int)
     Vs, Fs = [], []
     voff = 0
-    n_eval = 0
-    for i in range(nsb[0]):
-        for j in range(nsb[1]):
-            for k in range(nsb[2]):
-                sl = act[i * superblock:(i + 1) * superblock, j * superblock:(j + 1) * superblock,
-                         k * superblock:(k + 1) * superblock]
-                if not sl.any():
-                    continue
-                bi = np.argwhere(sl)
-                nbx, nby, nbz = sl.shape
-                n = np.array([nbx, nby, nbz]) * block + 1
-                origin = lo + hc * np.array([i, j, k]) * superblock
-                # valeurs par défaut (blocs inactifs) : signe du nœud grossier le plus proche
-                cs = dc[i * superblock:i * superblock + nbx + 1, j * superblock:j * superblock + nby + 1,
-                        k * superblock:k * superblock + nbz + 1]
-                ix = [np.minimum((np.arange(n[a]) + block // 2) // block, cs.shape[a] - 1) for a in range(3)]
-                vol = (np.sign(cs[np.ix_(ix[0], ix[1], ix[2])]) * hc).astype(F32)
-                # points fins des blocs actifs
-                pts = []
-                idx = []
-                lx = np.arange(block + 1)
-                LL = np.stack(np.meshgrid(lx, lx, lx, indexing="ij"), -1).reshape(-1, 3)
-                for b in bi:
-                    ii = b * block + LL
-                    idx.append(ii)
-                idx = np.concatenate(idx)
-                idx = np.unique(idx, axis=0)
-                P = origin + idx * h
-                d = sdf(P, margin=4 * h + 0.01)
-                n_eval += len(P)
-                vol[idx[:, 0], idx[:, 1], idx[:, 2]] = d
-                if vol.min() > 0 or vol.max() < 0:
-                    continue
-                try:
-                    V, Fc, _, _ = measure.marching_cubes(vol, 0.0, spacing=(h, h, h), allow_degenerate=False)
-                except (ValueError, RuntimeError):
-                    continue
-                Vs.append(V + origin)
-                Fs.append(Fc + voff)
-                voff += len(V)
+    sb_of_block = blocks // superblock
+    order = np.lexsort((sb_of_block[:, 2], sb_of_block[:, 1], sb_of_block[:, 0]))
+    sbk = (sb_of_block[order, 0] * nsb[1] + sb_of_block[order, 1]) * nsb[2] + sb_of_block[order, 2]
+    cuts = np.flatnonzero(np.diff(sbk)) + 1
+    for grp in np.split(order, cuts):
+        sbi = sb_of_block[grp[0]]
+        b0 = sbi * superblock                       # premier bloc du super-bloc
+        nb = np.minimum(superblock, (nc - 1) - b0)
+        n = nb * block + 1
+        f0 = b0 * block                             # premier échantillon fin
+        cs = dc[b0[0]:b0[0] + nb[0] + 1, b0[1]:b0[1] + nb[1] + 1, b0[2]:b0[2] + nb[2] + 1]
+        ix = [np.minimum((np.arange(n[a]) + block // 2) // block, cs.shape[a] - 1) for a in range(3)]
+        vol = (np.sign(cs[np.ix_(ix[0], ix[1], ix[2])]) * hc).astype(np.float32)
+        loc = (blocks[grp] - b0)[:, None, :] * block + LL[None, :, :]
+        loc = np.unique(loc.reshape(-1, 3), axis=0)
+        gi = loc + f0
+        gk = (gi[:, 0].astype(np.int64) * nf[1] + gi[:, 1]) * nf[2] + gi[:, 2]
+        pos = np.searchsorted(keys, gk)
+        vol[loc[:, 0], loc[:, 1], loc[:, 2]] = vals[pos]
+        if vol.min() > 0 or vol.max() < 0:
+            continue
+        try:
+            V, Fc, _, _ = measure.marching_cubes(vol, 0.0, allow_degenerate=False)
+        except (ValueError, RuntimeError):
+            continue
+        Vs.append(V.astype(np.float64) + f0)
+        Fs.append(Fc + voff)
+        voff += len(V)
     V = np.concatenate(Vs)
     Fm = np.concatenate(Fs)
-    # fusion des sommets dupliqués aux frontières des super-blocs
-    key = np.round(V / (h * 1e-3)).astype(np.int64)
-    _, inv = np.unique(key, axis=0, return_inverse=True)
+    key = np.round(V * 4096.0).astype(np.int64)     # coordonnées en espace d'indices : exactes entre super-blocs
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
     inv = np.asarray(inv).ravel()
-    uniq, first = np.unique(inv, return_index=True)
-    V2 = V[first]
+    V2 = lo + V[first] * h
     Fm = inv[Fm].reshape(-1, 3)
     good = (Fm[:, 0] != Fm[:, 1]) & (Fm[:, 1] != Fm[:, 2]) & (Fm[:, 0] != Fm[:, 2])
     Fm = Fm[good]
-    t2 = time.perf_counter()
-    log(f"[mesh] h={h * 1000:.1f} mm : {n_eval / 1e6:.2f} M points évalués, {len(V2)} sommets, {len(Fm)} triangles, "
-        f"{t2 - t0:.1f}s")
+    t3 = time.perf_counter()
+    log(f"[mesh] h={h * 1000:.1f} mm : {len(V2)} sommets, {len(Fm)} triangles, {t3 - t0:.1f}s")
     return V2, Fm

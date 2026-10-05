@@ -25,22 +25,33 @@ public struct MorphologyEvaluator: Sendable {
     public let skeleton: PonySkeleton
     let sliders: [String: PonyRigManifest.MorphSlider]
 
-    /// (identifiant du curseur, forme « plus » par défaut, forme « moins » par défaut).
-    static let mapping: [(String, String, String?)] = [
-        ("legLength", "prop_legs_long", "prop_legs_short"),
-        ("neckLength", "prop_neck_long", "prop_neck_short"),
-        ("bodyLength", "prop_body_long", "prop_body_short"),
-        ("stocky", "shape_stocky", nil),
-        ("refined", "shape_refined", nil),
-        ("condition", "shape_fat", "shape_thin"),
-        ("muscle", "shape_muscular", nil),
-        ("belly", "shape_belly", nil),
-        ("crest", "shape_crest", nil),
-        ("bone", "shape_bone_heavy", nil),
-        ("headShape", "head_dished", "head_roman"),
-        ("headShort", "head_short", nil),
-        ("muzzleBroad", "muzzle_broad", nil),
-        ("hoofSize", "hooves_large", nil),
+    /// Correspondance champ de configuration → curseurs du manifeste (identifiant, signe) → formes par défaut.
+    /// Les identifiants de l'exporteur (`Pipeline/pony/runtime_export.py`, DEFAULT_SLIDERS) sont acceptés comme
+    /// alias : `muscular`, `boneHeavy`, `hoovesLarge`, et `headProfile` dont le sens est inversé
+    /// (plus = `head_roman`), d'où le signe −1.
+    struct SliderMapping {
+        var key: String
+        var aliases: [(id: String, sign: Float)]
+        var plus: String
+        var minus: String?
+    }
+
+    static let mapping: [SliderMapping] = [
+        SliderMapping(key: "legLength", aliases: [("legLength", 1)], plus: "prop_legs_long", minus: "prop_legs_short"),
+        SliderMapping(key: "neckLength", aliases: [("neckLength", 1)], plus: "prop_neck_long", minus: "prop_neck_short"),
+        SliderMapping(key: "bodyLength", aliases: [("bodyLength", 1)], plus: "prop_body_long", minus: "prop_body_short"),
+        SliderMapping(key: "stocky", aliases: [("stocky", 1)], plus: "shape_stocky", minus: nil),
+        SliderMapping(key: "refined", aliases: [("refined", 1)], plus: "shape_refined", minus: nil),
+        SliderMapping(key: "condition", aliases: [("condition", 1)], plus: "shape_fat", minus: "shape_thin"),
+        SliderMapping(key: "muscle", aliases: [("muscle", 1), ("muscular", 1)], plus: "shape_muscular", minus: nil),
+        SliderMapping(key: "belly", aliases: [("belly", 1)], plus: "shape_belly", minus: nil),
+        SliderMapping(key: "crest", aliases: [("crest", 1)], plus: "shape_crest", minus: nil),
+        SliderMapping(key: "bone", aliases: [("bone", 1), ("boneHeavy", 1)], plus: "shape_bone_heavy", minus: nil),
+        SliderMapping(key: "headShape", aliases: [("headShape", 1), ("headProfile", -1)], plus: "head_dished",
+                      minus: "head_roman"),
+        SliderMapping(key: "headShort", aliases: [("headShort", 1)], plus: "head_short", minus: nil),
+        SliderMapping(key: "muzzleBroad", aliases: [("muzzleBroad", 1)], plus: "muzzle_broad", minus: nil),
+        SliderMapping(key: "hoofSize", aliases: [("hoofSize", 1), ("hoovesLarge", 1)], plus: "hooves_large", minus: nil),
     ]
 
     public init(manifest: PonyRigManifest) {
@@ -110,14 +121,24 @@ public struct MorphologyEvaluator: Sendable {
         var offsets = [SIMD3<Float>](repeating: SIMD3<Float>(0, 0, 0), count: n)
         var scales = [SIMD3<Float>](repeating: SIMD3<Float>(1, 1, 1), count: n)
 
-        for (id, defaultPlus, defaultMinus) in MorphologyEvaluator.mapping {
-            let v = MorphologyEvaluator.value(of: id, in: m)
-            let slider = sliders[id]
-            let plusName = slider?.plus ?? defaultPlus
-            let minusName = slider?.minus ?? defaultMinus
+        for entry in MorphologyEvaluator.mapping {
+            var v = MorphologyEvaluator.value(of: entry.key, in: m)
+            var slider: PonyRigManifest.MorphSlider? = nil
+            for alias in entry.aliases {
+                if let s = sliders[alias.id] {
+                    slider = s
+                    v *= alias.sign
+                    break
+                }
+            }
+            // Curseur déclaré par le manifeste : ses noms font foi (`null` = forme absente du corps).
+            let plusName: String? = slider != nil ? slider?.plus : entry.plus
+            let minusName: String? = slider != nil ? slider?.minus : entry.minus
             let wPlus = max(0, v)
             let wMinus = max(0, -v)
-            weights[plusName] = PonyMath.clamp01((weights[plusName] ?? 0) + wPlus)
+            if let pn = plusName {
+                weights[pn] = PonyMath.clamp01((weights[pn] ?? 0) + wPlus)
+            }
             if let mn = minusName {
                 weights[mn] = PonyMath.clamp01((weights[mn] ?? 0) + wMinus)
             }

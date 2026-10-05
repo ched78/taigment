@@ -29,7 +29,6 @@ extension CoatPreset {
         CoatPreset(id: "alezan_brule", name: "Alezan brûlé",
                    summary: "e/e, nuance foncée (liver) + léger charbonné.",
                    configuration: CoatConfiguration.make { c in
-                       c.expression.flaxen = 0.25
                        c.expression.shade = 1.0
                        c.expression.sooty = 0.3
                        c.face.kind = .star

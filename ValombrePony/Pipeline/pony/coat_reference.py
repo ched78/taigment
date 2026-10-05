@@ -331,7 +331,7 @@ PRESETS = [
      {"genotype": RED, "expression": {"shade": -0.2, "flaxen": 0.9}, "face": {"kind": "blaze"},
       "legs": _legs(hl=0.25, hr=0.12), "hair": {"tipLightening": 0.2}}),
     ("alezan_brule", "Alezan brûlé", "e/e, nuance foncée (liver) + léger charbonné.",
-     {"genotype": RED, "expression": {"shade": 1.0, "sooty": 0.3, "flaxen": 0.25}, "face": {"kind": "star", "size": 0.6}}),
+     {"genotype": RED, "expression": {"shade": 1.0, "sooty": 0.3}, "face": {"kind": "star", "size": 0.6}}),
     ("bai", "Bai", "E/_ A/_ — corps rouge, extrémités noires (préset par défaut).",
      {"face": {"kind": "star"}}),
     ("bai_brun", "Bai brun", "E/_ At/_ — presque noir, zones feu (bout du nez, flancs).",
@@ -1043,7 +1043,7 @@ def _compose_band(P, LM, maps, tabs, size, y0, y1):
         gi = np.minimum(P.greyStage * speed, F(1))
         grain = hash01(xs, ys, P.s["grey"])
         cov = smoothstep(0.0, 0.40, gi + (grain - F(0.5)) * F(0.30))
-        ds = P.greyDapples * F(4) * gi * (F(1) - gi)
+        ds = P.greyDapples * smoothstep(0.22, 0.42, gi) * (F(1) - smoothstep(0.58, 0.82, gi))
         lt = clamp01(gi * F(1.30) - F(0.30) + ds * (fD - F(0.5)) * F(1.4) + (grain - F(0.5)) * F(0.10))
         gcol = mix(P.greyDark, P.greyLight, T(lt))
         c = mix(c, gcol, T(cov))
@@ -1223,8 +1223,8 @@ def compose_iris(cfg: dict, detail: np.ndarray | None = None, size: int = 512) -
     fiber = value_noise(ang * F(40), ri * F(6) + F(16), IP["sIris"], period_x=160)
     base = np.broadcast_to(IP["base"], (size, size, 3)).astype(F).copy()
     if IP["vairon"] > 0:
-        sv = value_noise(ang * F(1.5), np.full_like(ang, F(16.5)), IP["sVair"], period_x=6)
-        base = mix(base, IP["blue"], smoothstep(0.45, 0.60, sv)[..., None])
+        sv = value_noise(ang * F(1.5), np.full_like(ang, F(16.5)), IP["sVair"], period_x=6) + (fiber - F(0.5)) * F(0.3)
+        base = mix(base, IP["blue"], smoothstep(0.44, 0.64, sv)[..., None])
     if detail is not None:
         rows = _axis_tables(detail.shape[0], size)
         cols = _axis_tables(detail.shape[1], size)

@@ -87,15 +87,30 @@ def _mirror(entries):
     return out
 
 
+def eye_axes(sign: float):
+    """Axe optique g (horizontal, vers l'extérieur) et axe de la fente h (horizontal, vers le canthus médial).
+
+    [A] axe optique horizontal à 33° en avant de la latérale. Les os de l'œil et des paupières sont orientés
+    le long de g : avec la règle de roulis du projet (X local = X monde projeté ⊥ à l'os), leur axe X local
+    est exactement ±h, l'axe de la fente palpébrale ⇒ une rotation autour de X local ferme les paupières
+    (cf. rapport de l'agent « body » pour le sens).
+    """
+    import math as _m
+    beta = _m.radians(33.0)
+    g = np.array([sign * _m.cos(beta), _m.sin(beta), 0.0])
+    h = np.array([-sign * _m.sin(beta), _m.cos(beta), 0.0])
+    return g, h
+
+
 def _eye(side: str, sign: float):
-    c = head_point(0.17, 0.02, sign * 0.085)
-    gaze = (c[0] + sign * 0.015, c[1] + 0.026, c[2])
-    up = (c[0], c[1] + 0.008, c[2] + 0.026)
-    down = (c[0], c[1] + 0.008, c[2] - 0.026)
+    # Centre du globe : ajusté au maillage du corps (body_sdf), cf. rapport de l'agent « body ».
+    c = np.array(head_point(0.17, 0.02, sign * 0.080))
+    gh, _ = eye_axes(sign)
+    rnd = lambda v: tuple(float(round(x, 4)) for x in v)
     return [
-        (f"eye_{side}", "head", c, gaze),
-        (f"eyelid_upper_{side}", "head", c, up),
-        (f"eyelid_lower_{side}", "head", c, down),
+        (f"eye_{side}", "head", rnd(c), rnd(c + 0.030 * gh)),
+        (f"eyelid_upper_{side}", "head", rnd(c), rnd(c + 0.026 * gh)),
+        (f"eyelid_lower_{side}", "head", rnd(c), rnd(c + 0.022 * gh)),
     ]
 
 

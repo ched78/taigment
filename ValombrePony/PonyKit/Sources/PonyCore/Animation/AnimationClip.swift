@@ -30,17 +30,16 @@ public struct WeightTrack: Sendable, Equatable {
 
 /// Clip d'animation échantillonnable (données de `PonyClips.bin` + métadonnées de `PonyRig.json`).
 ///
-/// Convention temporelle [I] : `duration` fait foi.
-/// - Clip non bouclé : l'image 0 est à t = 0 et l'image N−1 à t = `duration`.
-/// - Boucle **fermée** (dernière image = première, détecté automatiquement) : même chose, t = `duration` ≡ t = 0.
-/// - Boucle **ouverte** : l'image N−1 est suivie de l'image 0 ; la période vaut `duration` (= N/fps par défaut).
+/// Convention temporelle (SPEC §9, export validé) : `duration` fait foi.
+/// - Clip non bouclé : l'image 0 est à t = 0 et l'image N−1 à t = `duration` (= (N−1)/fps par défaut).
+/// - Clip bouclé : l'image N (égale à l'image 0) n'est PAS stockée ; l'image N−1 est suivie de l'image 0
+///   et la période vaut `duration` (= N/fps par défaut) — aucun saut au rebouclage.
 public struct AnimationClip: Sendable {
     public var name: String
     public var fps: Float
     public var frameCount: Int
     public var duration: Double
     public var loop: Bool
-    public var isClosedLoop: Bool
     public var tracks: [JointTrack]
     public var weightTracks: [WeightTrack]
     /// Vitesse de référence (m/s, espace poney, avant = −Z).
@@ -53,6 +52,8 @@ public struct AnimationClip: Sendable {
     public var events: [PonyRigManifest.ClipEvent]
     /// Phase de foulée au temps 0 (0 = poser du postérieur gauche).
     public var phaseOffset: Float
+    /// Nombre de foulées contenues dans le clip (≥ 1 ; `stridesPerClip` du manifeste, défaut 1).
+    public var stridesPerClip: Double
     /// Vrai si le clip vient réellement de données (faux pour un clip de repli vide).
     public var hasData: Bool
     /// `trackIndexByJoint[j]` = indice de piste du joint j, ou −1.
@@ -61,7 +62,8 @@ public struct AnimationClip: Sendable {
     public init(name: String, fps: Float, frameCount: Int, duration: Double? = nil, loop: Bool,
                 tracks: [JointTrack], weightTracks: [WeightTrack] = [], jointCount: Int,
                 rootVelocity: SIMD3<Float> = SIMD3<Float>(0, 0, 0), rootYawRate: Float = 0,
-                maskJoints: [Int]? = nil, events: [PonyRigManifest.ClipEvent] = [], phaseOffset: Float = 0) {
+                maskJoints: [Int]? = nil, events: [PonyRigManifest.ClipEvent] = [], phaseOffset: Float = 0,
+                stridesPerClip: Double = 1) {
         self.name = name
         self.fps = fps > 0 ? fps : 30
         self.frameCount = max(1, frameCount)
@@ -73,20 +75,18 @@ public struct AnimationClip: Sendable {
         self.maskJoints = maskJoints
         self.events = events.sorted { $0.time < $1.time }
         self.phaseOffset = phaseOffset
+        self.stridesPerClip = stridesPerClip.isFinite && stridesPerClip > 0 ? stridesPerClip : 1
         self.hasData = true
         var map = [Int](repeating: -1, count: max(0, jointCount))
         for (i, t) in tracks.enumerated() where t.jointIndex >= 0 && t.jointIndex < map.count {
             map[t.jointIndex] = i
         }
         trackIndexByJoint = map
-        let closed = loop && AnimationClip.detectClosedLoop(tracks: tracks, weightTracks: weightTracks,
-                                                            frameCount: max(1, frameCount))
-        isClosedLoop = closed
         let n = Double(max(1, frameCount))
         let f = Double(self.fps)
         if let d = duration, d > 0, d.isFinite {
             self.duration = d
-        } else if loop && !closed {
+        } else if loop {
             self.duration = n / f
         } else {
             self.duration = max(n - 1, 1) / f
@@ -101,16 +101,10 @@ public struct AnimationClip: Sendable {
         if n <= 1 || duration <= 0 || !time.isFinite { return (0, 0, 0) }
         if loop {
             let u = PonyMath.fract(time / duration)
-            if isClosedLoop {
-                let f = u * Double(n - 1)
-                let i0 = min(Int(f), n - 2)
-                return (i0, i0 + 1, Float(f - Double(i0)))
-            } else {
-                let f = u * Double(n)
-                let i0 = min(Int(f), n - 1)
-                let i1 = (i0 + 1) % n
-                return (i0, i1, Float(f - Double(i0)))
-            }
+            let f = u * Double(n)
+            let i0 = min(Int(f), n - 1)
+            let i1 = (i0 + 1) % n
+            return (i0, i1, Float(f - Double(i0)))
         } else {
             let u = min(max(time / duration, 0), 1)
             let f = u * Double(n - 1)
@@ -124,6 +118,18 @@ public struct AnimationClip: Sendable {
         if duration <= 0 { return 0 }
         if loop { return PonyMath.fract(time / duration) * duration }
         return min(max(time, 0), duration)
+    }
+
+    /// Fréquence de foulée de référence (foulées par seconde de clip).
+    public var strideFrequency: Double {
+        return duration > 0 ? stridesPerClip / duration : 0
+    }
+
+    /// Temps du clip correspondant à un compteur de foulées `cycles` (phase de foulée = partie fractionnaire),
+    /// compte tenu de `phaseOffset` et du nombre de foulées par clip.
+    public func time(forStrideCycles cycles: Double) -> Double {
+        let u = PonyMath.fract((cycles - Double(phaseOffset)) / stridesPerClip)
+        return u * duration
     }
 
     // MARK: Échantillonnage
@@ -227,34 +233,6 @@ public struct AnimationClip: Sendable {
         let a = values[min(i0, n - 1)]
         let b = values[min(i1, n - 1)]
         return a + (b - a) * alpha
-    }
-
-    /// Boucle fermée si, pour tous les canaux animés image par image, la dernière image ≈ la première.
-    static func detectClosedLoop(tracks: [JointTrack], weightTracks: [WeightTrack], frameCount: Int) -> Bool {
-        if frameCount < 3 { return false }
-        var sawAnimated = false
-        let tol: Float = 1e-4
-        for t in tracks {
-            if t.translations.count == frameCount {
-                sawAnimated = true
-                if PonyMath.length(t.translations[0] - t.translations[frameCount - 1]) > tol { return false }
-            }
-            if t.rotations.count == frameCount {
-                sawAnimated = true
-                if !t.rotations[0].isApproximatelyEqual(to: t.rotations[frameCount - 1], tolerance: tol) {
-                    return false
-                }
-            }
-            if t.scales.count == frameCount {
-                sawAnimated = true
-                if PonyMath.length(t.scales[0] - t.scales[frameCount - 1]) > tol { return false }
-            }
-        }
-        for w in weightTracks where w.values.count == frameCount {
-            sawAnimated = true
-            if abs(w.values[0] - w.values[frameCount - 1]) > tol { return false }
-        }
-        return sawAnimated
     }
 
     /// Clip vide (aucune piste) servant de repli quand un clip attendu manque : il laisse la pose intacte.

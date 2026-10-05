@@ -183,6 +183,11 @@ def check_clip(sk: Skeleton, local, meta, contacts=None, target=None, verbose=Fa
     zmin = P[..., 2].min(axis=0)
     res["body_min_z_mm"] = float(zmin[~distal].min() * 1000)
     res["distal_min_z_mm"] = float(zmin[distal].min() * 1000)
+    kmin = int(np.argmin(zmin))
+    res["lowest_point"] = {"bone": sk.names[js[kmin]], "frame": int(np.argmin(P[:, kmin, 2])),
+                           "z_mm": round(float(zmin[kmin] * 1000), 1)}
+    if min(res["body_min_z_mm"], res["distal_min_z_mm"]) < -5.0:
+        warn.append(f"pénétration du corps ({res['lowest_point']})")
     # --- articulations
     ang = np.empty((F, sk.N, 3))
     for i in range(sk.N):

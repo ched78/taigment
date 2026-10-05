@@ -51,14 +51,17 @@ public enum CoatCompositor {
             return RGBA8Image(width: size, height: size,
                               fill: (lut[encodeIndex(c.x)], lut[encodeIndex(c.y)], lut[encodeIndex(c.z)], 255))
         }
-        let shX = CoatAxisTable(mapSize: maps.shading.width, outSize: size)
-        let shY = CoatAxisTable(mapSize: maps.shading.height, outSize: size)
-        let rgX = CoatAxisTable(mapSize: maps.regions.width, outSize: size)
-        let rgY = CoatAxisTable(mapSize: maps.regions.height, outSize: size)
-        let paX = CoatAxisTable(mapSize: maps.params.width, outSize: size)
-        let paY = CoatAxisTable(mapSize: maps.params.height, outSize: size)
-        let ptX = CoatAxisTable(mapSize: maps.patterns.width, outSize: size)
-        let ptY = CoatAxisTable(mapSize: maps.patterns.height, outSize: size)
+        // Tables d'axes (mémoire propre, libérée à la fin) et vues sans comptage de références pour la boucle.
+        let tables = [CoatAxisTable(mapSize: maps.shading.width, outSize: size),
+                      CoatAxisTable(mapSize: maps.shading.height, outSize: size),
+                      CoatAxisTable(mapSize: maps.regions.width, outSize: size),
+                      CoatAxisTable(mapSize: maps.regions.height, outSize: size),
+                      CoatAxisTable(mapSize: maps.params.width, outSize: size),
+                      CoatAxisTable(mapSize: maps.params.height, outSize: size),
+                      CoatAxisTable(mapSize: maps.patterns.width, outSize: size),
+                      CoatAxisTable(mapSize: maps.patterns.height, outSize: size)]
+        let shX = tables[0].view, shY = tables[1].view, rgX = tables[2].view, rgY = tables[3].view
+        let paX = tables[4].view, paY = tables[5].view, ptX = tables[6].view, ptY = tables[7].view
         let shW = maps.shading.width
         let rgW = maps.regions.width
         let paW = maps.params.width
@@ -69,41 +72,43 @@ public enum CoatCompositor {
         let lut = encodeLUT
         let bandRows = 16
         let bands = (size + bandRows - 1) / bandRows
-        out.withUnsafeMutableBufferPointer { ob in
-            guard let outBase = ob.baseAddress else { return }
-            maps.shading.pixels.withUnsafeBufferPointer { shB in
-                maps.regions.pixels.withUnsafeBufferPointer { rgB in
-                    maps.params.pixels.withUnsafeBufferPointer { paB in
-                        maps.patterns.pixels.withUnsafeBufferPointer { ptB in
-                            lut.withUnsafeBufferPointer { lutB in
-                                guard let sh = shB.baseAddress, let rg = rgB.baseAddress,
-                                      let pa = paB.baseAddress, let pt = ptB.baseAddress,
-                                      let lt = lutB.baseAddress else { return }
-                                DispatchQueue.concurrentPerform(iterations: bands) { band in
-                                    let yStart = band * bandRows
-                                    let yEnd = min(size, yStart + bandRows)
-                                    for y in yStart..<yEnd {
-                                        let vy = (Float(y) + 0.5) / fsize
-                                        for x in 0..<size {
-                                            let s = bilinear4(sh, shW, shX, shY, x, y)
-                                            let r = bilinear4(rg, rgW, rgX, rgY, x, y)
-                                            let p = bilinear4(pa, paW, paX, paY, x, y)
-                                            let q = bilinear4(pt, ptW, ptX, ptY, x, y)
-                                            let ni = (Int(rgY.nearest[y]) * rgW + Int(rgX.nearest[x])) * 4
-                                            let rid = min((Int(rg[ni]) + 8) / 16, 15)
-                                            let t = CoatTexelInput(
-                                                lum: s.x, cav: s.y, skin: s.z,
-                                                ext: r.y, pmask: r.z, smask: r.w,
-                                                leg: p.x, fu: p.y, fv: p.z, dors: p.w,
-                                                fA: q.x, fB: q.y, fS: q.z, fD: q.w,
-                                                rid: rid, x: x, y: y,
-                                                ux: (Float(x) + 0.5) / fsize, vy: vy)
-                                            let c = shadeTexel(t, P, LM)
-                                            let o = (y * size + x) * 4
-                                            outBase[o] = lt[encodeIndex(c.x)]
-                                            outBase[o + 1] = lt[encodeIndex(c.y)]
-                                            outBase[o + 2] = lt[encodeIndex(c.z)]
-                                            outBase[o + 3] = 255
+        withExtendedLifetime(tables) {
+            out.withUnsafeMutableBufferPointer { ob in
+                guard let outBase = ob.baseAddress else { return }
+                maps.shading.pixels.withUnsafeBufferPointer { shB in
+                    maps.regions.pixels.withUnsafeBufferPointer { rgB in
+                        maps.params.pixels.withUnsafeBufferPointer { paB in
+                            maps.patterns.pixels.withUnsafeBufferPointer { ptB in
+                                lut.withUnsafeBufferPointer { lutB in
+                                    guard let sh = shB.baseAddress, let rg = rgB.baseAddress,
+                                          let pa = paB.baseAddress, let pt = ptB.baseAddress,
+                                          let lt = lutB.baseAddress else { return }
+                                    DispatchQueue.concurrentPerform(iterations: bands) { band in
+                                        let yStart = band * bandRows
+                                        let yEnd = min(size, yStart + bandRows)
+                                        for y in yStart..<yEnd {
+                                            let vy = (Float(y) + 0.5) / fsize
+                                            for x in 0..<size {
+                                                let s = bilinear4(sh, shW, shX, shY, x, y)
+                                                let r = bilinear4(rg, rgW, rgX, rgY, x, y)
+                                                let p = bilinear4(pa, paW, paX, paY, x, y)
+                                                let q = bilinear4(pt, ptW, ptX, ptY, x, y)
+                                                let ni = (Int(rgY.nearest[y]) * rgW + Int(rgX.nearest[x])) * 4
+                                                let rid = min((Int(rg[ni]) + 8) / 16, 15)
+                                                let t = CoatTexelInput(
+                                                    lum: s.x, cav: s.y, skin: s.z,
+                                                    ext: r.y, pmask: r.z, smask: r.w,
+                                                    leg: p.x, fu: p.y, fv: p.z, dors: p.w,
+                                                    fA: q.x, fB: q.y, fS: q.z, fD: q.w,
+                                                    rid: rid, x: x, y: y,
+                                                    ux: (Float(x) + 0.5) / fsize, vy: vy)
+                                                let c = shadeTexel(t, P, LM)
+                                                let o = (y * size + x) * 4
+                                                outBase[o] = lt[encodeIndex(c.x)]
+                                                outBase[o + 1] = lt[encodeIndex(c.y)]
+                                                outBase[o + 2] = lt[encodeIndex(c.z)]
+                                                outBase[o + 3] = 255
+                                            }
                                         }
                                     }
                                 }
@@ -118,7 +123,7 @@ public enum CoatCompositor {
 
     /// Échantillon bilinéaire des 4 canaux (octets / 255) au texel de sortie (x, y).
     @inline(__always)
-    static func bilinear4(_ px: UnsafePointer<UInt8>, _ width: Int, _ tx: CoatAxisTable, _ ty: CoatAxisTable,
+    static func bilinear4(_ px: UnsafePointer<UInt8>, _ width: Int, _ tx: CoatAxisView, _ ty: CoatAxisView,
                           _ x: Int, _ y: Int) -> SIMD4<Float> {
         let x0 = Int(tx.i0[x])
         let x1 = Int(tx.i1[x])
@@ -193,7 +198,7 @@ public enum CoatCompositor {
             let gi = min(P.greyStage * speed, 1)
             let grain = CoatNoise.hash01(xu, yu, P.sGrey)
             let cov = coatSmoothstep(0.0, 0.40, gi + (grain - 0.5) * 0.30)
-            let ds = P.greyDapples * 4 * gi * (1 - gi)
+            let ds = P.greyDapples * coatSmoothstep(0.22, 0.42, gi) * (1 - coatSmoothstep(0.58, 0.82, gi))
             let lt = coatClamp01(gi * 1.30 - 0.30 + ds * (t.fD - 0.5) * 1.4 + (grain - 0.5) * 0.10)
             let gcol = coatMix(P.greyDark, P.greyLight, lt)
             c = coatMix(c, gcol, cov)
@@ -485,13 +490,13 @@ public enum CoatCompositor {
                 let fiber = CoatNoise.valueNoise(ang * 40, ri * 6 + 16, IP.sIris, periodX: 160)
                 var base = IP.base
                 if IP.vairon > 0 {
-                    let sv = CoatNoise.valueNoise(ang * 1.5, 16.5, IP.sVair, periodX: 6)
-                    base = coatMix(base, IP.blue, coatSmoothstep(0.45, 0.60, sv))
+                    let sv = CoatNoise.valueNoise(ang * 1.5, 16.5, IP.sVair, periodX: 6) + (fiber - 0.5) * 0.3
+                    base = coatMix(base, IP.blue, coatSmoothstep(0.44, 0.64, sv))
                 }
                 let shade: Float
                 if let d = detail, let tables = dTables {
                     let v = d.pixels.withUnsafeBufferPointer { b -> SIMD4<Float> in
-                        bilinear4(b.baseAddress!, d.width, tables.1, tables.0, x, y)
+                        withExtendedLifetime(tables) { bilinear4(b.baseAddress!, d.width, tables.1.view, tables.0.view, x, y) }
                     }
                     shade = 0.5 + v.x
                 } else {
@@ -538,18 +543,22 @@ struct CoatTexelInput {
 
 /// Table d'échantillonnage d'un axe (identique à `_axis_tables` en Python) :
 /// f = clamp((o + 0,5)·(taille carte / taille sortie) − 0,5, 0, taille − 1) ; plus proche voisin = Int((o + 0,5)·échelle).
-struct CoatAxisTable {
-    var i0: [Int32]
-    var i1: [Int32]
-    var w: [Float]
-    var nearest: [Int32]
+/// Mémoire allouée manuellement (libérée dans `deinit`) pour que la boucle par texel n'ait aucun comptage de
+/// références : elle utilise `view` (pointeurs nus) sous `withExtendedLifetime`.
+final class CoatAxisTable {
+    let count: Int
+    let i0: UnsafeMutablePointer<Int32>
+    let i1: UnsafeMutablePointer<Int32>
+    let w: UnsafeMutablePointer<Float>
+    let nearest: UnsafeMutablePointer<Int32>
 
     init(mapSize: Int, outSize: Int) {
         let n = max(outSize, 0)
-        i0 = [Int32](repeating: 0, count: n)
-        i1 = [Int32](repeating: 0, count: n)
-        w = [Float](repeating: 0, count: n)
-        nearest = [Int32](repeating: 0, count: n)
+        count = n
+        i0 = UnsafeMutablePointer<Int32>.allocate(capacity: max(n, 1))
+        i1 = UnsafeMutablePointer<Int32>.allocate(capacity: max(n, 1))
+        w = UnsafeMutablePointer<Float>.allocate(capacity: max(n, 1))
+        nearest = UnsafeMutablePointer<Int32>.allocate(capacity: max(n, 1))
         let scale = Float(mapSize) / Float(max(outSize, 1))
         let last = Float(max(mapSize - 1, 0))
         for o in 0..<n {
@@ -563,4 +572,24 @@ struct CoatAxisTable {
             nearest[o] = Int32(min(Int(pos * scale), max(mapSize - 1, 0)))
         }
     }
+
+    deinit {
+        i0.deallocate()
+        i1.deallocate()
+        w.deallocate()
+        nearest.deallocate()
+    }
+
+    /// Vue sans comptage de références (valide tant que la table est vivante).
+    var view: CoatAxisView {
+        CoatAxisView(i0: UnsafePointer(i0), i1: UnsafePointer(i1), w: UnsafePointer(w), nearest: UnsafePointer(nearest))
+    }
+}
+
+/// Pointeurs nus d'une `CoatAxisTable`.
+struct CoatAxisView {
+    let i0: UnsafePointer<Int32>
+    let i1: UnsafePointer<Int32>
+    let w: UnsafePointer<Float>
+    let nearest: UnsafePointer<Int32>
 }

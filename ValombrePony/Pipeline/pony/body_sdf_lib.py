@@ -367,6 +367,40 @@ class Bump(Prim):
         return self.amp * np.exp(-r2 / (self.w * self.w)) * win
 
 
+class PolyBump(Prim):
+    """Déplacement gaussien le long d'une polyligne (fenêtre lissée sur l'abscisse curviligne totale)."""
+
+    def __init__(self, pts, width, amp, taper=0.15):
+        self.pts = np.asarray(pts, F32)
+        seg = self.pts[1:] - self.pts[:-1]
+        self.len = np.linalg.norm(seg, axis=1).astype(F32)
+        self.cum = np.concatenate([[0.0], np.cumsum(self.len)]).astype(F32)
+        self.total = F32(self.cum[-1])
+        self.dir = (seg / np.maximum(self.len[:, None], 1e-9)).astype(F32)
+        self.w = F32(width)
+        self.amp = F32(amp)
+        self.tp = F32(max(taper, 1e-3))
+        self.pad = abs(amp)
+        m = 3.0 * width
+        self.lo = self.pts.min(0) - m
+        self.hi = self.pts.max(0) + m
+
+    def eval(self, P):
+        best = np.full(len(P), np.inf, F32)
+        arc = np.zeros(len(P), F32)
+        for i in range(len(self.len)):
+            D = P - self.pts[i]
+            t = np.clip(D @ self.dir[i], 0.0, self.len[i])
+            R = D - t[:, None] * self.dir[i][None, :]
+            r2 = (R * R).sum(1)
+            m = r2 < best
+            best = np.where(m, r2, best)
+            arc = np.where(m, self.cum[i] + t, arc)
+        u = arc / self.total
+        win = smoothstep(0.0, self.tp, u) * smoothstep(0.0, self.tp, 1.0 - u)
+        return self.amp * np.exp(-best / (self.w * self.w)) * win
+
+
 class BlobBump(Prim):
     """Déplacement gaussien ellipsoïdal (bosse/creux local). Opération 'D'."""
 
@@ -425,12 +459,22 @@ class Group:
             self.hi = np.maximum(self.hi, hi + k)
         return child
 
+    def _arrays(self):
+        c = getattr(self, "_cache", None)
+        if c is None or c[0] != len(self.nodes):
+            lo = np.array([n[3] for n in self.nodes], F32).reshape(-1, 3)
+            hi = np.array([n[4] for n in self.nodes], F32).reshape(-1, 3)
+            ext = np.array([n[2] + getattr(n[1], "pad", 0.0) for n in self.nodes], F32)
+            self._cache = c = (len(self.nodes), lo, hi, ext)
+        return c
+
     def eval_box(self, P, lo, hi, margin):
+        _, nlo, nhi, ext = self._arrays()
+        m = (ext + margin)[:, None]
+        rel = ~(np.any(nlo - m > hi, axis=1) | np.any(nhi + m < lo, axis=1))
         d = None
-        for op, ch, k, clo, chi in self.nodes:
-            m = margin + k + getattr(ch, "pad", 0.0)
-            if np.any(clo - m > hi) or np.any(chi + m < lo):
-                continue
+        for j in np.flatnonzero(rel):
+            op, ch, k, clo, chi = self.nodes[j]
             v = ch.eval_box(P, lo, hi, margin) if isinstance(ch, Group) else ch.eval(P)
             if d is None:
                 if op == "U":
@@ -482,6 +526,11 @@ def evaluate(root: Group, P, margin=0.05, cell=0.08):
     if N == 0:
         return out
     lo = P.min(0)
+    # taille de bloc adaptée à la densité (évite des milliers de blocs presque vides)
+    ext = np.maximum(P.max(0) - lo, 1e-3)
+    occ = N / max(1.0, float(np.prod(np.ceil(ext / cell))))
+    if occ < 64.0:
+        cell = float(min(0.35, cell * (64.0 / max(occ, 1e-3)) ** (1.0 / 3.0)))
     key3 = np.floor((P - lo) / cell).astype(np.int64)
     dims = key3.max(0) + 1
     key = (key3[:, 0] * dims[1] + key3[:, 1]) * dims[2] + key3[:, 2]
@@ -544,3 +593,27 @@ def ray_surface(fn, origin, direction, t_max=0.5, n=200):
         else:
             b = m
     return origin + 0.5 * (a + b) * d
+
+
+def ray_surface_batch(fn, origins, dirs, t_max=0.3, n=160, iters=22):
+    """Version vectorisée de ray_surface : premier passage intérieur→extérieur le long de chaque rayon.
+    Renvoie (points (R,3), ok (R,) bool)."""
+    O = np.asarray(origins, np.float64)
+    D = np.asarray(dirs, np.float64)
+    D = D / np.linalg.norm(D, axis=1, keepdims=True)
+    R = len(O)
+    ts = np.linspace(0.0, t_max, n)
+    P = (O[:, None, :] + ts[None, :, None] * D[:, None, :]).reshape(-1, 3).astype(F32)
+    v = fn(P).reshape(R, n)
+    cross = (v[:, :-1] <= 0) & (v[:, 1:] > 0)
+    ok = cross.any(1)
+    i = np.argmax(cross, axis=1)
+    a = ts[i].copy()
+    b = ts[np.minimum(i + 1, n - 1)].copy()
+    for _ in range(iters):
+        m = 0.5 * (a + b)
+        fm = fn((O + m[:, None] * D).astype(F32))
+        inside = fm <= 0
+        a = np.where(inside, m, a)
+        b = np.where(inside, b, m)
+    return O + (0.5 * (a + b))[:, None] * D, ok

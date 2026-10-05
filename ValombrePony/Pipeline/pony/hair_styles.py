@@ -20,11 +20,19 @@ NECK_CHAIN = [f"neck_{i:02d}" for i in range(1, 7)]
 TAIL_CHAIN = [f"tail_{i:02d}" for i in range(1, 11)]
 FORELOCK_CHAIN = ["forelock_01", "forelock_02", "forelock_03"]
 
-CARD = {k: htex.REGIONS[v] for k, v in htex.CARD_VARIANTS.items()}
-R_BASE = htex.REGIONS["base"]
-R_BRAID = htex.REGIONS["braid"]
-R_BRUSH = htex.REGIONS["brush"]
-R_WISP = htex.REGIONS["wisp"]
+_VPAD = 3.0 / htex.SIZE      # marge en v (3 px) : évite le débordement du filtrage sur la région voisine
+
+
+def _inset_v(rect):
+    u0, v0, u1, v1 = rect
+    return (u0, v0 + _VPAD, u1, v1 - _VPAD)
+
+
+CARD = {k: _inset_v(htex.REGIONS[v]) for k, v in htex.CARD_VARIANTS.items()}
+R_BASE = _inset_v(htex.REGIONS["base"])
+R_BRAID = _inset_v(htex.REGIONS["braid"])
+R_BRUSH = _inset_v(htex.REGIONS["brush"])
+R_WISP = _inset_v(htex.REGIONS["wisp"])
 
 ROOT_DEPTH = 0.0025          # pénétration contrôlée des racines dans la peau (m) [I]
 
@@ -90,7 +98,13 @@ def interp_profile(ctrl, t):
 # ----------------------------------------------------------------------------------------------
 # Crinière naturelle
 # ----------------------------------------------------------------------------------------------
-MANE_LENGTH = [(0.0, 0.16), (0.12, 0.25), (0.35, 0.32), (0.65, 0.30), (0.88, 0.24), (1.0, 0.19)]   # [A]
+MANE_LENGTH = [(0.0, 0.04), (0.03, 0.10), (0.07, 0.17), (0.15, 0.25), (0.35, 0.32), (0.65, 0.30), (0.88, 0.23), (0.96, 0.17),
+               (1.0, 0.11)]   # [A]
+
+
+def end_taper(t, a=0.10, b=0.12):
+    """0 aux extrémités de la crête (garrot, nuque) -> 1 au milieu : les crins s'y couchent davantage."""
+    return float(smoothstep(0.0, a, t) * smoothstep(1.0, 1.0 - b, t))
 
 
 def mane_natural(surf, J, crest, seed=11):
@@ -105,10 +119,11 @@ def mane_natural(surf, J, crest, seed=11):
     roots = np.zeros((C, 3))
     for c, t in enumerate(ts):
         p, tg, n, r = crest_frame(crest, t)
-        q = surf.nearest(p + r * (-0.012))[0]
+        e = end_taper(t)
+        q = surf.nearest(p + r * (-0.012 * (0.3 + 0.7 * e)))[0]
         roots[c] = q
         L = 0.70 * interp_profile(MANE_LENGTH, t)
-        d0 = _poll_bias(nrm(n * 0.75 + r * 0.65 - tg * 0.10), t, n, r, tg)
+        d0 = _poll_bias(nrm(n * 0.75 * (0.15 + 0.85 * e) + r * 0.65 - tg * 0.10), t, n, r, tg)
         grid[:, c] = grow_guide(surf, q, d0, L, NS, lambda s: 0.003 + 0.005 * s, bend=30.0)
     UVg = np.zeros((NS + 1, C, 2))
     u0, v0, u1, v1 = R_BASE
@@ -126,34 +141,26 @@ def mane_natural(surf, J, crest, seed=11):
         dict(tag=1, n=66, width=(0.040, 0.052), xoff=(-0.010, 0.004), up=(0.75, 0.95), side=(0.50, 0.70),
              off=lambda s: 0.008 + 0.012 * s, lenf=(0.78, 1.04), nseg=12, nacross=2, arch=0.0,
              variants=["dense", "clumped", "short", "dense"], lift=0.006, sway=0.006),
-        dict(tag=2, n=62, width=(0.036, 0.048), xoff=(-0.012, 0.0), up=(0.70, 0.95), side=(0.45, 0.65),
-             off=lambda s: 0.014 + 0.016 * s, lenf=(0.70, 1.12), nseg=12, nacross=3, arch=0.35,
-             variants=["clumped", "wispy", "split", "pointed", "clumped"], lift=0.012, sway=0.010),
+        dict(tag=2, n=62, width=(0.036, 0.048), xoff=(-0.010, 0.002), up=(0.50, 0.72), side=(0.62, 0.85),
+             off=lambda s: 0.012 + 0.016 * s, lenf=(0.70, 1.12), nseg=12, nacross=3, arch=0.2,
+             variants=["clumped", "wispy", "split", "pointed", "clumped"], lift=0.010, sway=0.012, bend=(30, 38)),
     ]
     for lay in layers:
         n = lay["n"]
         tt = (np.arange(n) + rng.uniform(0.1, 0.9, n)) / n          # échantillonnage stratifié
         for k in range(n):
-            t = float(np.clip(tt[k], 0.01, 0.975))
+            t = float(np.clip(tt[k], 0.015, 0.975))
             p, tg, nn, r = crest_frame(crest, t)
-            q = surf.nearest(p + r * rng.uniform(*lay["xoff"]))[0]
+            e = end_taper(t)
+            q = surf.nearest(p + r * rng.uniform(*lay["xoff"]) * (0.3 + 0.7 * e))[0]
             L = interp_profile(MANE_LENGTH, t) * rng.uniform(*lay["lenf"])
-            d0 = nrm(nn * rng.uniform(*lay["up"]) + r * rng.uniform(*lay["side"])
+            d0 = nrm(nn * rng.uniform(*lay["up"]) * (0.15 + 0.85 * e) + r * rng.uniform(*lay["side"])
                      + tg * rng.uniform(-0.18, 0.08))
             d0 = _poll_bias(d0, t, nn, r, tg)
-            P = grow_guide(surf, q, d0, L, lay["nseg"], lay["off"], bend=rng.uniform(22, 30))
+            off = lay["off"]
+            P = grow_guide(surf, q, d0, L, lay["nseg"], lambda s, off=off, e=e: off(s) * (0.45 + 0.55 * e),
+                           bend=rng.uniform(*lay.get("bend", (22, 30))))
             _post_card(surf, b, P, tg, rng, lay, aux=t)
-    # mèches isolées tombant à gauche (près du garrot) [A]
-    for t in rng.uniform(0.03, 0.20, 4):
-        p, tg, nn, r = crest_frame(crest, t)
-        q = surf.nearest(p + r * rng.uniform(-0.012, -0.006))[0]
-        L = interp_profile(MANE_LENGTH, t) * rng.uniform(0.45, 0.7)
-        d0 = nrm(nn * 0.9 - r * 0.45 - tg * 0.05)
-        P = grow_guide(surf, q, d0, L, 10, lambda s: 0.006 + 0.010 * s, bend=28.0)
-        lay = dict(tag=3, width=(0.022, 0.03), nacross=2, arch=0.0, variants=["wispy", "pointed"], lift=0.004,
-                   sway=0.004)
-        _post_card(surf, b, P, tg, rng, lay, aux=t)
-
     A = b.arrays()
     W = _mane_weights(surf, J, crest, A, tip_mane=0.85)
     return b, W, {}
@@ -187,15 +194,32 @@ def _post_card(surf, b, P, across, rng, lay, aux=0.0, facing=None):
                  u_range=(1.0, 0.0) if flip else (0.0, 1.0))
 
 
+def neck_to_mane(W):
+    """Transfère la part de chaque neck_k vers mane_k (enfant direct de neck_k) : à l'identité des mane_*,
+    la déformation est inchangée ; les ressorts du runtime sur mane_* ajoutent le balancement."""
+    W = W.copy()
+    for k in range(1, 7):
+        a, b = JIDX[f"neck_{k:02d}"], JIDX[f"mane_{k:02d}"]
+        W[:, b] += W[:, a]
+        W[:, a] = 0.0
+    return W
+
+
+def skin_weights_per_vertex(surf, J, P, fallback_chain):
+    """Poids de peau du corps au point de surface le plus proche de chaque sommet (transfert)."""
+    return root_weights(surf, J, P, fallback_chain)
+
+
 def _mane_weights(surf, J, crest, A, tip_mane=0.85, rigid_tags=()):
-    """Racines : poids de peau du corps ; vers les pointes : chaîne mane_* (balancement secondaire)."""
-    roots, inv = unique_roots(A["ROOT"])
-    Wr = root_weights(surf, J, roots, neck_fallback())[inv]
-    Wm = chain_weights(roots, J, MANE_CHAIN, smooth=0.9)[inv]
+    """Poids de la crinière : poids de peau du corps transférés au plus proche point de chaque sommet (les
+    crins suivent la peau qu'ils recouvrent), puis la part de neck_k passe progressivement (racine -> pointe)
+    à mane_k pour le balancement secondaire. Racines (s = 0) : 100 % peau."""
+    Ws = skin_weights_per_vertex(surf, J, A["V"], neck_fallback())
+    Wm = neck_to_mane(Ws)
     alpha = tip_mane * np.clip(A["S"], 0, 1) ** 1.3
     for tg in rigid_tags:
         alpha[A["TAG"] == tg] = 0.0
-    return limit_influences(mix_weights(Wr, Wm, alpha))
+    return limit_influences(mix_weights(Ws, Wm, alpha))
 
 
 # ----------------------------------------------------------------------------------------------
@@ -221,8 +245,8 @@ def mane_roached(surf, J, crest, seed=13):
     UVg = np.zeros((NA, Ncs, 2))
     roots = np.zeros((Ncs, 3))
     for c, (p, tg, n, r) in enumerate(frames):
-        h = interp_profile(ROACH_HEIGHT, ts[c]) * 0.62
-        w = 0.024 * (0.6 + 0.4 * smoothstep(0, 0.1, ts[c]) * smoothstep(1.0, 0.9, ts[c]))
+        h = interp_profile(ROACH_HEIGHT, ts[c]) * 0.36
+        w = 0.013 * (0.6 + 0.4 * smoothstep(0, 0.1, ts[c]) * smoothstep(1.0, 0.9, ts[c]))
         roots[c] = p
         for a_i, a in enumerate(al):
             q = p + r * (w / 2) * np.sin(a) + n * h * np.cos(a)
@@ -230,27 +254,31 @@ def mane_roached(surf, J, crest, seed=13):
                 q = surf.nearest(q)[0]
             grid[a_i, c] = q
             FAC[a_i, c] = nrm(n * np.cos(a) + r * np.sin(a) * 1.2)
-            UVg[a_i, c] = (u0 + 0.004 + (u1 - u0 - 0.008) * uu[c], v1 - (v1 - v0) * 0.42 * np.cos(a))
-    Sg = np.repeat(np.cos(al)[:, None] * 0.42, Ncs, 1)
+            UVg[a_i, c] = (u0 + 0.004 + (u1 - u0 - 0.008) * uu[c], v1 - (v1 - v0) * 0.18 * np.cos(a))
+    Sg = np.repeat(np.cos(al)[:, None] * 0.18, Ncs, 1)
     b.add_grid(grid, UVg, Sg, roots, FAC, tag=0, aux=ts, root_rows=(0, NA - 1))
     # --- ailettes alpha (silhouette en brosse) : 3 rangées ---
-    for row, (lean, hf, phase) in enumerate(((0.0, 1.05, 0.0), (-0.42, 0.9, 0.37), (0.42, 0.9, 0.71))):
+    for row, (lean, hf, phase) in enumerate(((0.0, 1.05, 0.0), (-0.20, 0.97, 0.37), (0.20, 0.97, 0.71),
+                                              (-0.42, 0.85, 0.19), (0.42, 0.85, 0.53))):
         NR = 3
         g = np.zeros((NR, Ncs, 3))
         fac = np.zeros((NR, Ncs, 3))
         uvg = np.zeros((NR, Ncs, 2))
         rts = np.zeros((Ncs, 3))
-        uw = tri_wave(ts * Lc / 0.04 + phase)
+        uw = tri_wave(ts * Lc / (0.035 + 0.006 * row) + phase)
         for c, (p, tg, n, r) in enumerate(frames):
             h = interp_profile(ROACH_HEIGHT, ts[c]) * hf * (1 + 0.06 * np.sin(ts[c] * 37 + row))
             dirv = nrm(n * np.cos(lean) + r * np.sin(lean) - tg * 0.12)
-            base = surf.nearest(p + r * 0.006 * np.sign(lean))[0]
+            base = surf.nearest(p + r * 0.010 * np.sin(lean))[0]
             rts[c] = base
+            vs = 0.0 if lean == 0.0 else 0.42      # ailettes latérales : sans la partie opaque des racines
+            side = r if lean >= 0.0 else -r
             for k in range(NR):
                 s = k / (NR - 1)
                 g[k, c] = base + dirv * h * s
-                fac[k, c] = nrm(n + r * np.sin(lean) * 0.8)
-                uvg[k, c] = (u0 + 0.004 + (u1 - u0 - 0.008) * uw[c], v1 - (v1 - v0) * s * 0.98)
+                # normale de volume franchement latérale (enroulement cohérent des quads de l'ailette)
+                fac[k, c] = nrm(n * 0.5 + side * 1.0)
+                uvg[k, c] = (u0 + 0.004 + (u1 - u0 - 0.008) * uw[c], v1 - (v1 - v0) * (vs + (0.98 - vs) * s))
         Sg2 = np.repeat(np.linspace(0, 1, NR)[:, None], Ncs, 1)
         b.add_grid(g, uvg, Sg2, rts, fac, tag=1 + row, aux=ts)
     A = b.arrays()
@@ -310,16 +338,17 @@ def mane_braided(surf, J, crest, seed=17):
     roots = np.zeros((C, 3))
     for c, t in enumerate(ts):
         p, tg, n, r = crest_frame(crest, t)
-        q = surf.nearest(p + r * (-0.013))[0]
+        e = end_taper(t, 0.06, 0.06)
+        q = surf.nearest(p + r * (-0.013 * (0.4 + 0.6 * e)))[0]
         roots[c] = q
-        d0 = nrm(n * 0.45 + r * 0.9)
-        grid[:, c] = grow_guide(surf, q, d0, 0.050, NS, lambda s: 0.0025 + 0.002 * s, bend=35.0)
+        d0 = nrm(n * 0.45 * e + r * 0.9)
+        grid[:, c] = grow_guide(surf, q, d0, 0.050 * (0.35 + 0.65 * e), NS, lambda s: 0.0025 + 0.002 * s, bend=35.0)
     u0, v0, u1, v1 = R_BASE
     uu = tri_wave(ts * Lc / 0.06)
     UVg = np.zeros((NS + 1, C, 2))
     for rr in range(NS + 1):
         UVg[rr, :, 0] = u0 + 0.004 + (u1 - u0 - 0.008) * uu
-        UVg[rr, :, 1] = v1 - (rr / NS) * (v1 - v0) * 0.45
+        UVg[rr, :, 1] = v1 - (rr / NS) * (v1 - v0) * 0.78       # le bas atteint la frange (bord irrégulier)
     Sg = np.repeat(np.linspace(0, 0.3, NS + 1)[:, None], C, 1)
     FAC = np.array([[surf.nearest(grid[rr, c])[1] for c in range(C)] for rr in range(NS + 1)])
     b.add_grid(grid, UVg, Sg, roots, FAC, tag=0, aux=ts)
@@ -343,12 +372,12 @@ def mane_braided(surf, J, crest, seed=17):
         anchors.append(dict(index=k, crest_t=float(t), center=center, top=top, normal=nq, tangent=tq, right=rq,
                             radius=float(radii[2]), root=q))
     A = b.arrays()
-    # poids : base -> peau (+ un soupçon de mane_*) ; boutons rigides sur la peau sous le bouton
+    # poids : base -> peau sous chaque sommet (+ un soupçon de mane_*) ; boutons rigides sur la peau sous le bouton
+    W = _mane_weights(surf, J, crest, A, tip_mane=0.15)
     roots_u, inv = unique_roots(A["ROOT"])
-    Wr = root_weights(surf, J, roots_u, neck_fallback())[inv]
-    Wm = chain_weights(roots_u, J, MANE_CHAIN, smooth=0.9)[inv]
-    alpha = np.where(A["TAG"] == 0, 0.15 * A["S"], 0.0)
-    W = limit_influences(mix_weights(Wr, Wm, alpha))
+    Wr = limit_influences(root_weights(surf, J, roots_u, neck_fallback()))[inv]
+    btn = A["TAG"] >= 10
+    W[btn] = Wr[btn]
     for a in anchors:
         w = surf.skin_weights_at(a["root"])
         if w is None:
@@ -419,11 +448,10 @@ def forelock_natural(surf, J, crest, seed=19):
                            steer_fn=lambda s, p, d, sp=spread: lat * sp * s)
             _post_card(surf, b, P, lat, rng, lay)
     A = b.arrays()
-    roots_u, inv = unique_roots(A["ROOT"])
-    Wr = root_weights(surf, J, roots_u, ["head"])[inv]
+    Ws = skin_weights_per_vertex(surf, J, A["V"], ["head"])
     Wc = chain_weights(A["V"], J, FORELOCK_CHAIN, smooth=0.8)
     alpha = 0.92 * smoothstep(0.0, 0.45, A["S"])
-    W = limit_influences(mix_weights(Wr, Wc, alpha))
+    W = limit_influences(mix_weights(Ws, Wc, alpha))
     return b, W, {}
 
 
@@ -457,6 +485,8 @@ def braid_tube(b, C, Fn, radius, sides=8, tag=0, aux=0.0, root=None, s_values=No
             fus.append(1.0)   # fin de la tuile précédente
             prev_tile = ti
         fus.append(x - ti)
+        if i == N - 1 and len(fus) == 2:
+            fus = [1.0]       # couture sur le dernier échantillon : pas d'anneau de départ orphelin
         for fu in fus:
             ring = []
             for j in range(sides + 1):
@@ -524,11 +554,11 @@ def forelock_braided(surf, J, crest, seed=23):
             p = qq + nn * (0.0025 + 0.004 * np.sin(np.pi * f))
             grid[k, c] = p
             FAC[k, c] = nn
-    u0, v0, u1, v1 = R_BASE
+    u0, v0, u1, v1 = CARD["dense"]
     UVg = np.zeros((NS + 1, Cc, 2))
     for k in range(NS + 1):
         UVg[k, :, 0] = u0 + 0.004 + (u1 - u0 - 0.008) * (xs - xs[0]) / (xs[-1] - xs[0])
-        UVg[k, :, 1] = v1 - (k / NS) * (v1 - v0) * 0.40
+        UVg[k, :, 1] = v1 - (k / NS) * (v1 - v0) * 0.45
     Sg = np.repeat(np.linspace(0, 0.3, NS + 1)[:, None], Cc, 1)
     b.add_grid(grid, UVg, Sg, roots, FAC, tag=0)
     # --- natte ---
@@ -540,11 +570,14 @@ def forelock_braided(surf, J, crest, seed=23):
     rq = nrm(np.cross(T_end, ne))
     knob(b, qe + ne * 0.010, T_end, ne, rq, np.array([0.019, 0.0115, 0.0135]), tag=2, root=qe)
     A = b.arrays()
-    roots_u, inv = unique_roots(A["ROOT"])
-    Wr = root_weights(surf, J, roots_u, ["head"])[inv]
+    Ws = skin_weights_per_vertex(surf, J, A["V"], ["head"])
     Wc = chain_weights(A["V"], J, FORELOCK_CHAIN, smooth=0.8)
     alpha = np.where(A["TAG"] == 0, 0.0, 0.35 * A["S"])
-    W = limit_influences(mix_weights(Wr, Wc, alpha))
+    W = limit_influences(mix_weights(Ws, Wc, alpha))
+    # bouton replié : rigide (mêmes poids pour tous ses sommets : moyenne du bouton)
+    knob_m = A["TAG"] == 2
+    if knob_m.any():
+        W[knob_m] = limit_influences(W[knob_m].mean(0, keepdims=True))[0]
     return b, W, {}
 
 
@@ -677,8 +710,11 @@ def tail_natural(surf, J, crest, seed=29, part_id="tail_natural"):
     layers = [
         dict(tag=1, n=58, a=(0.0, 0.90), phi=150, rfac=0.80, off=lambda s: 0.007 + 0.006 * s, width=(0.032, 0.045),
              nacross=2, variants=["dense", "clumped", "dense", "short"], dz=0.035),
-        dict(tag=2, n=72, a=(0.0, 0.85), phi=158, rfac=1.0, off=lambda s: 0.012 + 0.008 * s, width=(0.030, 0.042),
+        dict(tag=2, n=72, a=(0.0, 0.85), phi=158, rfac=1.0, off=lambda s: 0.010 + 0.008 * s, width=(0.030, 0.042),
              nacross=2, variants=["clumped", "wispy", "split", "pointed", "clumped"], dz=0.05),
+        # mèches folles clairsemées en surface : adoucissent la silhouette (cartes étroites, texture « wispy »)
+        dict(tag=3, n=36, a=(0.0, 0.8), phi=160, rfac=1.10, off=lambda s: 0.014 + 0.010 * s, width=(0.016, 0.024),
+             nacross=2, variants=["wispy", "pointed"], dz=0.07),
     ]
     for lay in layers:
         _tail_cards(surf, J, b, rng, lay, z_end0, z_dock_end, TAIL_RADIUS, a_pow=1.3)
@@ -703,8 +739,8 @@ def _tail_cards(surf, J, b, rng, lay, z_end0, z_dock_end, rprof, a_pow=1.0):
         across = nrm(np.cross(F, tangents(P)))
         s = np.linspace(0, 1, len(P))
         w = rng.uniform(*lay["width"]) * (0.70 + 0.30 * np.sin(np.pi * np.clip(s * 0.9 + 0.1, 0, 1)))
-        tw0 = np.radians(rng.uniform(-40, 40))
-        twist = tw0 * smoothstep(0.0, 0.25, s) + np.radians(rng.uniform(-15, 15)) * s
+        tw0 = np.radians(rng.uniform(-28, 28))
+        twist = tw0 * smoothstep(0.15, 0.45, s) + np.radians(rng.uniform(-12, 12)) * s
         variant = lay["variants"][rng.integers(len(lay["variants"]))]
         flip = rng.uniform() < 0.5
         b.add_ribbon(P, F, w, CARD[variant], across_dir=across, n_across=lay["nacross"],
@@ -712,12 +748,29 @@ def _tail_cards(surf, J, b, rng, lay, z_end0, z_dock_end, rprof, a_pow=1.0):
                      twist=twist)
 
 
-def _tail_weights(surf, J, A, root_blend=0.06):
+def _tail_weights(surf, J, A, s_fade=(0.0, 0.30), skin_tags=()):
+    """Poids de queue (≤ 4 influences) :
+    - couches plaquées sur le tronçon (`skin_tags` : enveloppe et natte de la queue tressée) : poids de peau du corps
+      transférés au plus proche point de chaque sommet ;
+    - crins pendants : poids de peau à la racine RESTREINTS aux os de la queue (renormalisés ; la peau du dessous
+      du tronçon mêle `hips`, ce qui déchirait les mèches quand la queue se relève), fondus le long de la mèche
+      (s ∈ s_fade) vers le dégradé tail_01…tail_10 obtenu par projection sur la chaîne."""
+    V = A["V"]
+    tail_idx = np.array([JIDX[n] for n in TAIL_CHAIN])
+    Wc = chain_weights(V, J, TAIL_CHAIN, smooth=0.7)
     roots_u, inv = unique_roots(A["ROOT"])
-    Wr = root_weights(surf, J, roots_u, TAIL_CHAIN[:4])[inv]
-    Wc = chain_weights(A["V"], J, TAIL_CHAIN, smooth=0.7)
-    alpha = smoothstep(0.0, root_blend, A["S"])
-    return limit_influences(mix_weights(Wr, Wc, alpha))
+    Wr = root_weights(surf, J, roots_u, TAIL_CHAIN[:4])
+    Wrt = np.zeros_like(Wr)
+    Wrt[:, tail_idx] = Wr[:, tail_idx]
+    ssum = Wrt.sum(1, keepdims=True)
+    fallback = chain_weights(roots_u, J, TAIL_CHAIN[:4])
+    Wrt = np.where(ssum > 0.2, Wrt / np.maximum(ssum, 1e-9), fallback)
+    beta = 1.0 - smoothstep(s_fade[0], s_fade[1], A["S"])
+    W = mix_weights(Wc, Wrt[inv], beta)
+    m = np.isin(A["TAG"], list(skin_tags))
+    if m.any():
+        W[m] = skin_weights_per_vertex(surf, J, V[m], TAIL_CHAIN[:4])
+    return limit_influences(W)
 
 
 def tail_braided(surf, J, crest, seed=31):
@@ -744,15 +797,18 @@ def tail_braided(surf, J, crest, seed=31):
                 q, n = r[0], r[1]
             grid[i, j] = q + n * 0.003
             FAC[i, j] = n
+    # mèches tirées des côtés (racines) vers la natte au centre : v suit |phi| (bord -> centre), u le tronçon,
+    # avec un biais diagonal (les crins descendent vers la natte)
     u0, v0, u1, v1 = R_BASE
-    uu = tri_wave(np.abs(np.degrees(phis)) / 70.0)
+    arcd = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(grid[:, len(phis) // 2], axis=0), axis=1))])
     UVg = np.zeros((NA, len(phis), 2))
+    fr = 1.0 - np.abs(phis) / np.abs(phis).max()          # 0 au bord, 1 au centre
     for i in range(NA):
-        UVg[i, :, 0] = u0 + 0.004 + (u1 - u0 - 0.008) * uu
-        UVg[i, :, 1] = v1 - (i / (NA - 1)) * (v1 - v0) * 0.45
-    Sg = np.repeat(np.linspace(0, 0.4, NA)[:, None], len(phis), 1)
+        UVg[i, :, 0] = u0 + 0.004 + (u1 - u0 - 0.008) * tri_wave(arcd[i] / 0.05 + fr * 0.35)
+        UVg[i, :, 1] = v1 - fr * (v1 - v0) * 0.45
+    Sg = np.repeat(fr[None, :] * 0.4, NA, 0)
     roots = grid[0].copy()
-    b.add_grid(grid, UVg, Sg, roots, FAC, tag=0, root_rows=())
+    b.add_grid(grid, UVg, Sg, roots, FAC, tag=0, root_rows=(), root_cols=(0, len(phis) - 1))
     # --- natte le long du dessus du tronçon ---
     NB = 30
     Ab = np.linspace(0.02, 1.0, NB)
@@ -794,7 +850,7 @@ def tail_braided(surf, J, crest, seed=31):
     for lay in layers:
         _tail_cards(surf, J, b, rng, lay, z_end0, z_dock_end, rprof)
     A = b.arrays()
-    W = _tail_weights(surf, J, A)
+    W = _tail_weights(surf, J, A, skin_tags=(0, 1))
     return b, W, {}
 
 
@@ -829,7 +885,7 @@ def feathers(surf, J, crest, seed=37):
             F = np.array([nrm(radial * 0.7 + surf.nearest(p)[1] * 0.3) for p in P])
             tang = nrm(np.cross(up, radial))
             s = np.linspace(0, 1, len(P))
-            w = rng.uniform(0.016, 0.024) * (1.0 - 0.3 * s)
+            w = rng.uniform(0.016, 0.024) * (0.55 + 0.45 * np.sin(np.pi * np.clip(0.15 + 0.7 * s, 0, 1)))
             flip = rng.uniform() < 0.5
             b.add_ribbon(P, F, w, R_WISP, across_dir=np.broadcast_to(tang, P.shape), n_across=2, tag=li,
                          u_range=(1.0, 0.0) if flip else (0.0, 1.0))

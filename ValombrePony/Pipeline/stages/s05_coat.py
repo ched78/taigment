@@ -124,6 +124,60 @@ def save_png(arr: np.ndarray, path: Path):
     Image.fromarray(arr).save(path, optimize=False)
 
 
+REGION_NAMES = ["corps", "tête", "bout du nez", "oreille ext.", "oreille int.", "jambe AG", "jambe AD", "jambe PG",
+                "jambe PD", "sabot AG", "sabot AD", "sabot PG", "sabot PD", "châtaignes", "péri-oculaire",
+                "peau ventrale"]
+CHANNELS = {"shading": ("lum poil", "cavité", "peau nue", "-"), "regions": ("id×16", "extrémités", "pangaré", "charbonné"),
+            "params": ("haut. jambe", "u facial", "v facial", "raie mulet"),
+            "patterns": ("tobiano", "overo/sab/spl", "taches", "pommelures")}
+
+
+def inspect_maps(maps, out_path: Path):
+    """Statistiques par région (min / moyenne / max de chaque canal) + planche des canaux."""
+    size = 512
+    near = {k: cr._axis_tables(maps[k].shape[0], size)[3] for k in MAP_NAMES}
+    nearx = {k: cr._axis_tables(maps[k].shape[1], size)[3] for k in MAP_NAMES}
+    res = {k: maps[k][np.ix_(near[k], nearx[k])] for k in MAP_NAMES}
+    rid = np.minimum((res["regions"][..., 0].astype(int) + 8) // 16, 15)
+    print("[coat] couverture des régions (fraction des texels à 512²) et canaux (min/moy/max, 0…1) :")
+    for r in range(16):
+        m = rid == r
+        if not m.any():
+            continue
+        parts = []
+        for k in ("shading", "regions", "params", "patterns"):
+            for c in range(4):
+                if (k, c) in (("regions", 0), ("shading", 3)):
+                    continue
+                v = res[k][..., c][m] / 255.0
+                parts.append(f"{CHANNELS[k][c]}={v.min():.2f}/{v.mean():.2f}/{v.max():.2f}")
+        print(f"  {r:2d} {REGION_NAMES[r]:14s} {m.mean():6.3f}  " + "  ".join(parts))
+    cells = []
+    labels = []
+    for k in MAP_NAMES:
+        for c in range(4):
+            if (k, c) == ("shading", 3):
+                continue
+            ch = res[k][..., c]
+            if (k, c) == ("regions", 0):
+                pal = (np.array([[(i * 97) % 255, (i * 57 + 80) % 255, (i * 151 + 30) % 255] for i in range(16)])
+                       .astype(np.uint8))
+                img = pal[rid]
+            else:
+                img = np.stack([ch] * 3, -1)
+            cells.append(Image.fromarray(img).resize((256, 256), Image.NEAREST))
+            labels.append(f"{k}.{'RGBA'[c]} {CHANNELS[k][c]}")
+    cols = 5
+    rows = math.ceil(len(cells) / cols)
+    sheet = Image.new("RGB", (cols * 256, rows * 256), (30, 30, 30))
+    for i, im in enumerate(cells):
+        label_cell(im, labels[i])
+        sheet.paste(im, ((i % cols) * 256, (i // cols) * 256))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out_path)
+    print(f"[coat] planche des canaux {out_path}")
+
+
 # ---------------------------------------------------------------------------------------------
 # Albedos et planches
 # ---------------------------------------------------------------------------------------------
@@ -148,13 +202,24 @@ def build_albedos(maps, landmarks, only=None):
     return default, out
 
 
+def _font(size: int):
+    """Police avec accents (DejaVu Sans si présente, sinon police PIL par défaut)."""
+    from PIL import ImageFont
+
+    for f in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+              "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"):
+        if Path(f).exists():
+            return ImageFont.truetype(f, size)
+    return ImageFont.load_default()
+
+
 def label_cell(im: Image.Image, text: str, sub: str | None = None):
     d = ImageDraw.Draw(im)
-    h = 30 if sub else 16
+    h = 34 if sub else 20
     d.rectangle([0, im.height - h, im.width, im.height], fill=(0, 0, 0))
-    d.text((4, im.height - h + 2), text, fill=(255, 255, 255))
+    d.text((4, im.height - h + 2), text, fill=(255, 255, 255), font=_font(14))
     if sub:
-        d.text((4, im.height - 15), sub, fill=(190, 190, 190))
+        d.text((4, im.height - 16), sub, fill=(190, 190, 190), font=_font(11))
     return im
 
 
@@ -186,7 +251,7 @@ def hair_iris_sheet(path: Path, strands: np.ndarray, ids=("bai", "alezan_crins_l
         iris = Image.fromarray(cr.compose_iris(cfg, None, 256)[..., :3]).resize((cell, cell), Image.LANCZOS)
         sheet.paste(hi, (i * cell, 0))
         sheet.paste(iris, (i * cell, cell))
-        d.text((i * cell + 4, 2 * cell + 4), pid, fill=(255, 255, 255))
+        d.text((i * cell + 4, 2 * cell + 3), pid, fill=(255, 255, 255), font=_font(12))
     path.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(path)
     print(f"[coat] planche crins/iris {path}")
@@ -583,26 +648,30 @@ def swift_vectors_source() -> str:
         "    struct BodyCase { let name: String; let json: String; let texels: [Texel]; let mean: [Double] }",
         "    struct ImageCase { let name: String; let json: String; let texels: [Texel] }",
         "",
-        "    static let bodyCases: [BodyCase] = [",
     ]
-    for name, js, tex, mean in body_cases:
-        L.append(f'        BodyCase(name: "{name}",')
-        L.append(f'                 json: #"{js}"#,')
-        L.append("                 texels: [")
-        L += tex_lines(tex, "                     ")
-        L.append("                 ],")
-        L.append("                 mean: [%s]),"  % ", ".join("%.4f" % m for m in mean))
-    L.append("    ]")
+    # Un `static let` par cas (allège le vérificateur de types Swift), puis les listes.
+    names = {"body": [], "hairCases": [], "irisCases": []}
+    for k, (name, js, tex, mean) in enumerate(body_cases):
+        L.append(f"    static let body{k}: BodyCase = BodyCase(")
+        L.append(f'        name: "{name}",')
+        L.append(f'        json: #"{js}"#,')
+        L.append("        texels: [")
+        L += tex_lines(tex, "            ")
+        L.append("        ],")
+        L.append("        mean: [%s])" % ", ".join("%.4f" % m for m in mean))
+        names["body"].append(f"body{k}")
+    L.append("    static let bodyCases: [BodyCase] = [" + ", ".join(names["body"]) + "]")
     L.append("")
-    for var, cs in (("hairCases", hair_cases), ("irisCases", iris_cases)):
-        L.append(f"    static let {var}: [ImageCase] = [")
-        for name, js, tex in cs:
-            L.append(f'        ImageCase(name: "{name}",')
-            L.append(f'                  json: #"{js}"#,')
-            L.append("                  texels: [")
-            L += tex_lines(tex, "                      ")
-            L.append("                  ]),")
-        L.append("    ]")
+    for var, prefix, cs in (("hairCases", "hair", hair_cases), ("irisCases", "iris", iris_cases)):
+        for k, (name, js, tex) in enumerate(cs):
+            L.append(f"    static let {prefix}{k}: ImageCase = ImageCase(")
+            L.append(f'        name: "{name}",')
+            L.append(f'        json: #"{js}"#,')
+            L.append("        texels: [")
+            L += tex_lines(tex, "            ")
+            L.append("        ])")
+            names[var].append(f"{prefix}{k}")
+        L.append(f"    static let {var}: [ImageCase] = [" + ", ".join(names[var]) + "]")
         L.append("")
     L.append("    static let irisDetailTexels: [Texel] = [")
     L += tex_lines(detail_case, "        ")
@@ -636,6 +705,7 @@ def main(argv=None):
     ap.add_argument("--no-render", action="store_true", help="pas de rendu Blender")
     ap.add_argument("--only", default="", help="liste d'ids de présets séparés par des virgules")
     ap.add_argument("--samples", type=int, default=24)
+    ap.add_argument("--inspect", action="store_true", help="statistiques par région + planche des canaux, puis arrêt")
     ap.add_argument("--render-worker", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--blend", default="", help=argparse.SUPPRESS)
     ap.add_argument("--out", default="", help=argparse.SUPPRESS)
@@ -656,6 +726,9 @@ def main(argv=None):
     print(f"[coat] cartes : {source} ; repères : {lm_source}")
     for k in MAP_NAMES:
         print(f"[coat]   {k}: {maps[k].shape}")
+    if args.inspect:
+        inspect_maps(maps, COAT_PREVIEW_DIR / "maps_channels.png")
+        return 0
     _, albedos = build_albedos(maps, landmarks, only)
     preset_sheet(albedos, COAT_PREVIEW_DIR / "presets_uv.png")
 

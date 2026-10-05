@@ -52,6 +52,7 @@ FORE_BOUNDS = {
     "fetlock": (-105 * D, 26 * D),    # flexion ≤ 105° ; hyperextension bornée à 60° après rectitude (cf. solve)
     "coffin": (-50 * D, 15 * D),      # paturon + sabot ≈ 50° de flexion, ~15° d'extension (SPEC §3)
     "pastern_twist": (-10 * D, 10 * D),
+    "pastern_lat": (-8 * D, 8 * D),   # abduction/adduction du boulet (ROM 13–18° [V], anatomy.md §1.6)
 }
 HIND_BOUNDS = {
     "hip_flex": (-25 * D, 40 * D),    # hanche : + flexion ≤ 40°, − extension ≤ 25° (SPEC §3)
@@ -62,6 +63,7 @@ HIND_BOUNDS = {
     "fetlock": (-105 * D, 32 * D),
     "coffin": (-50 * D, 15 * D),
     "pastern_twist": (-10 * D, 10 * D),
+    "pastern_lat": (-8 * D, 8 * D),
 }
 FETLOCK_HYPER_MAX = 60 * D   # hyperextension max du boulet au-delà de la rectitude (SPEC §3)
 
@@ -75,6 +77,7 @@ class LimbFrameInput:
     """Données d'une image pour un membre (repère monde Blender du clip)."""
     toe: np.ndarray                 # (3,) cible de la pince
     heel: np.ndarray                # (3,) cible du talon (milieu)
+    quarters: np.ndarray | None = None   # (2,3) cibles des mamelles (roulis du sabot), poids w_rot
     w_rot: float = 1.0              # poids de l'orientation (talon)
     carpus: float = 0.0             # flexion imposée du carpe (rad, delta repos, − = flexion) [antérieur]
     fetlock_pref: float = 0.0       # préférence boulet (delta repos)
@@ -112,7 +115,7 @@ class LimbSolver:
             self.var_names = ["hip_flex", "hip_abd", "stifle", "fetlock", "coffin", "hock_slack"]
             bounds = HIND_BOUNDS
         if self.use_twist:
-            self.var_names += ["sh_twist" if self.front else "hip_twist", "pastern_twist"]
+            self.var_names += ["sh_twist" if self.front else "hip_twist", "pastern_twist", "pastern_lat"]
         self.lb = np.array([bounds[n][0] for n in self.var_names])
         self.ub = np.array([bounds[n][1] for n in self.var_names])
         # borne d'hyperextension du boulet : 60° après rectitude, convertie en delta / repos
@@ -141,6 +144,7 @@ class LimbSolver:
             ang[3, 0] = inp.carpus
             ang[4, 0] = v["fetlock"]
             ang[4, 1] = v.get("pastern_twist", 0.0)
+            ang[4, 2] = v.get("pastern_lat", 0.0)
             ang[5, 0] = v["coffin"]
         else:
             ang[0, 0] = v["hip_flex"]
@@ -150,6 +154,7 @@ class LimbSolver:
             ang[2, 0] = -self.k_recip * v["stifle"] + v["hock_slack"]
             ang[3, 0] = v["fetlock"]
             ang[3, 1] = v.get("pastern_twist", 0.0)
+            ang[3, 2] = v.get("pastern_lat", 0.0)
             ang[4, 0] = v["coffin"]
         return ang
 
@@ -182,6 +187,8 @@ class LimbSolver:
         Ms, _ = self.world_chain(parent_world, x, inp, scap_flex)
         sole = self.sole_points(Ms)
         r = [W_TOE * (sole[0] - inp.toe), W_TOE * inp.w_rot * (sole[5] - inp.heel)]
+        if inp.quarters is not None:
+            r.append(0.5 * W_TOE * inp.w_rot * (sole[3:5] - inp.quarters).ravel())
         v = dict(zip(self.var_names, x))
         r.append(np.array([inp.w_fetlock * (v["fetlock"] - inp.fetlock_pref),
                            inp.w_coffin * (v["coffin"] - inp.coffin_pref)]))
@@ -197,7 +204,7 @@ class LimbSolver:
         r.append(np.array([0.3 * (abd - inp.abd_pref)]))
         if self.use_twist:
             tw = v["sh_twist"] if self.front else v["hip_twist"]
-            r.append(np.array([0.3 * (tw - inp.twist_pref), 0.5 * v["pastern_twist"]]))
+            r.append(np.array([0.3 * (tw - inp.twist_pref), 0.5 * v["pastern_twist"], 0.5 * v["pastern_lat"]]))
         if inp.prox_pref is not None:
             px = v["sh_flex"] if self.front else v["hip_flex"]
             r.append(np.array([0.15 * (px - inp.prox_pref)]))
@@ -206,7 +213,7 @@ class LimbSolver:
             r.append(np.array([0.15 * (md - inp.mid_pref)]))
         if inp.w_ground > 0:
             # pénalité unilatérale : points de sole + articulation du boulet au-dessus du sol
-            zmin = np.concatenate([sole[:, 2], [Ms[-2][2, 3] - 0.02]])
+            zmin = np.concatenate([sole[1:, 2] if inp.ground_clear <= 0.0 else sole[:, 2], [Ms[-2][2, 3] - 0.02]])
             pen = np.minimum(0.0, zmin - inp.ground_clear)
             r.append(inp.w_ground * pen)
         return np.concatenate([np.atleast_1d(a) for a in r])
@@ -218,6 +225,15 @@ class LimbSolver:
         x0 = np.clip(x0, self.lb + 1e-9, self.ub - 1e-9)
         res = least_squares(self.residuals, x0, bounds=(self.lb, self.ub), args=(parent_world, inp, scap),
                             method="trf", xtol=1e-10, ftol=1e-10, gtol=1e-10, max_nfev=400)
+        if np.any(x0 != 0.0):
+            # démarrage à chaud piégé dans un minimum local : on réessaie à froid et on garde le meilleur
+            Ms, _ = self.world_chain(parent_world, res.x, inp, scap)
+            if np.linalg.norm(self.sole_points(Ms)[0] - inp.toe) > 0.002:
+                cold = least_squares(self.residuals, np.clip(np.zeros_like(x0), self.lb + 1e-9, self.ub - 1e-9),
+                                     bounds=(self.lb, self.ub), args=(parent_world, inp, scap), method="trf",
+                                     xtol=1e-10, ftol=1e-10, gtol=1e-10, max_nfev=400)
+                if cold.cost < res.cost:
+                    res = cold
         Ms, ang = self.world_chain(parent_world, res.x, inp, scap)
         sole = self.sole_points(Ms)
         err_toe = float(np.linalg.norm(sole[0] - inp.toe))

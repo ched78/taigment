@@ -41,6 +41,8 @@ final class LocomotionController {
         var yawRate: Float
         var duration: Double
         var phaseOffset: Double
+        /// Foulées par seconde de clip (`stridesPerClip / duration`).
+        var strideFrequency: Double
     }
 
     static let slotCount = Slot.allCases.count
@@ -53,9 +55,16 @@ final class LocomotionController {
     private var clipTime: [Double]
     private var previousClipTime: [Double]
 
-    /// Phase de foulée normalisée commune [0, 1) (0 = poser du postérieur gauche).
-    private(set) var phase: Double = 0
-    private(set) var previousPhase: Double = 0
+    /// Compteur de foulées commun (partie entière = foulées écoulées, modulo 840 ; partie fractionnaire =
+    /// phase de foulée normalisée, 0 = poser du postérieur gauche). Un clip de k foulées est échantillonné à
+    /// `fract((cycles − phaseOffset) / k) · durée` : la phase est conservée lors des fondus entre allures.
+    private(set) var cycles: Double = 0
+    private(set) var previousCycles: Double = 0
+
+    /// Phase de foulée normalisée commune [0, 1).
+    var phase: Double {
+        return PonyMath.fract(cycles)
+    }
     /// Vitesse avant (m/s de référence, signée).
     private(set) var speed: Float = 0
     /// Lacet de direction (rad/s de référence, + = gauche).
@@ -100,7 +109,8 @@ final class LocomotionController {
             }
             let duration = clip.duration > 0 ? clip.duration : Double(defaults?.duration ?? 1)
             infos.append(SlotInfo(clipIndex: clipIndex, clip: clip, forwardSpeed: forward, velocity: velocity,
-                                  yawRate: yaw, duration: duration, phaseOffset: Double(clip.phaseOffset)))
+                                  yawRate: yaw, duration: duration, phaseOffset: Double(clip.phaseOffset),
+                                  strideFrequency: clip.stridesPerClip / max(duration, 1e-3)))
         }
         info = infos
         let n = LocomotionController.slotCount
@@ -351,7 +361,7 @@ final class LocomotionController {
         }
 
         // 8. Phase commune (moyenne pondérée des fréquences de foulée des clips cycliques actifs).
-        previousPhase = phase
+        previousCycles = cycles
         var cyclicWeight: Float = 0
         var frequency: Double = 0
         for slot in Slot.allCases where slot.isCyclic {
@@ -359,14 +369,19 @@ final class LocomotionController {
             let w = weight[k]
             if w <= 0 { continue }
             cyclicWeight += w
-            frequency += Double(w * rate[k]) / max(info[k].duration, 1e-3)
+            frequency += Double(w * rate[k]) * info[k].strideFrequency
         }
         if cyclicWeight > 1e-4 {
             let f = frequency / Double(cyclicWeight)
-            phase = PonyMath.fract(phase + f * Double(dt * timeScale))
+            cycles += f * Double(dt * timeScale)
+            if cycles >= 840 {
+                // 840 = ppcm(1…8) : le rebouclage ne décale aucun clip de 1 à 8 foulées.
+                cycles -= 840
+                previousCycles -= 840
+            }
         } else {
-            phase = 0
-            previousPhase = 0
+            cycles = 0
+            previousCycles = 0
         }
         for k in 0..<2 {
             previousClipTime[k] = clipTime[k]
@@ -469,8 +484,8 @@ final class LocomotionController {
         steerYaw = 0
         gait = .idle
         gaitTimer = 0
-        phase = 0
-        previousPhase = 0
+        cycles = 0
+        previousCycles = 0
         resting = false
         restTimer = 0
     }
@@ -498,7 +513,7 @@ final class LocomotionController {
     func sampleTime(_ k: Int) -> Double {
         let i = info[k]
         if Slot(rawValue: k)?.isCyclic ?? false {
-            return PonyMath.fract(phase - i.phaseOffset) * i.duration
+            return i.clip.time(forStrideCycles: cycles)
         }
         return clipTime[k]
     }
@@ -506,7 +521,7 @@ final class LocomotionController {
     private func previousSampleTime(_ k: Int) -> Double {
         let i = info[k]
         if Slot(rawValue: k)?.isCyclic ?? false {
-            return PonyMath.fract(previousPhase - i.phaseOffset) * i.duration
+            return i.clip.time(forStrideCycles: previousCycles)
         }
         return previousClipTime[k]
     }
@@ -563,9 +578,9 @@ final class LocomotionController {
         let from = previousSampleTime(k)
         var to = sampleTime(k)
         if Slot(rawValue: k)?.isCyclic ?? false {
-            let dphase = PonyMath.fract(phase - previousPhase)
-            if dphase <= 0 { return }
-            to = from + dphase * info[k].duration
+            let dcycles = cycles - previousCycles
+            if dcycles <= 0 { return }
+            to = from + dcycles / clip.stridesPerClip * clip.duration
         } else if to <= from {
             return
         }

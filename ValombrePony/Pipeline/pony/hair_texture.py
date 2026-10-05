@@ -241,6 +241,9 @@ def _card_strands(rng, H, W, variant: str):
         if rng.uniform() < 0.12:            # quelques crins rejoignent l'agglomération voisine
             k = int(np.clip(k + rng.choice([-1, 1]), 0, n_clumps - 1))
         Ls = clump_len[k] * (1.0 - 0.42 * rng.uniform() ** 1.6)   # pointes effilochées (longueurs variées)
+        ue = min(x0 - margin, W - margin - x0) / W                  # 0 au bord … 0.5 au centre
+        if ue < 0.12:                                               # bords effilochés : crins plus courts
+            Ls *= rng.uniform(0.45, 1.0) if rng.uniform() < 0.6 else 1.0
         if variant == "wispy" and rng.uniform() < 0.25:
             Ls *= rng.uniform(0.5, 0.8)
         L = int(H * min(Ls, 1.0))
@@ -313,24 +316,25 @@ def gen_base(rng, H, W):
 
 
 def gen_brush(rng, H, W):
-    """Crins courts en brosse (crinière rasée, crête des tresses). Racine en haut, périodique en u."""
+    """Crins courts en brosse (crinière rasée, crête des tresses). Racine en haut, périodique en u.
+    Mèches fines et nombreuses, pointes irrégulières (pas de « dents » régulières)."""
     lay = Layer(H, W, wrap=True)
     y = np.arange(H)
     t = y / H
-    for i in range(520):
+    for i in range(760):
         x0 = rng.uniform(0, W)
-        Ls = rng.uniform(0.70, 1.0)
+        Ls = 1.0 - 0.38 * rng.uniform() ** 1.4
         L = int(H * Ls)
         tt = t[:L]
-        lean = rng.uniform(-6, 6)
-        x = x0 + lean * tt + 0.8 * _smooth_noise(rng, L, H * 0.5)
-        w = rng.uniform(1.8, 2.8) * (1.0 - _smoothstep(0.75, 1.0, tt / Ls) * 0.6)
-        lum = rng.uniform(0.62, 0.95) * (0.60 + 0.40 * _smoothstep(0.0, 0.5, tt))
+        lean = rng.uniform(-3, 3)
+        x = x0 + lean * tt ** 1.3 + 1.0 * _smooth_noise(rng, L, H * 0.5)
+        w = rng.uniform(1.4, 2.3) * (1.0 - _smoothstep(0.6, 1.0, tt / Ls) * 0.75)
+        lum = rng.uniform(0.66, 1.0) * (0.72 + 0.28 * _smoothstep(0.0, 0.5, tt))
         lay.draw(Strand(x=x, w=w, lum=lum, rid=rng.uniform(), height=rng.uniform(0.6, 1.0)))
     rgba = lay.straight()
-    opaque = (1.0 - _smoothstep(0.45, 0.65, t))[:, None]
+    opaque = (1.0 - _smoothstep(0.40, 0.60, t))[:, None]
     a = rgba[..., 3]
-    under = 0.32
+    under = 0.45
     rgba[..., 0] = np.where(a > 1e-6, rgba[..., 0], under)
     rgba[..., 0] = rgba[..., 0] * (1 - opaque) + (rgba[..., 0] * a + under * (1 - a)) * opaque
     rgba[..., 3] = np.maximum(a, opaque)
@@ -346,14 +350,15 @@ def gen_wisp(rng, H, W):
     t = y / H
     for i in range(110):
         x0 = W / 2 + (rng.uniform(-1, 1) ** 3 * 0.5 + rng.uniform(-0.35, 0.35)) * (W - 24)
-        Ls = 1.0 - 0.6 * rng.uniform() ** 1.3
+        y0 = int(H * rng.uniform(0.0, 0.30) ** 1.5)          # haut effiloché (pas de ligne de racine nette)
+        Ls = (1.0 - 0.6 * rng.uniform() ** 1.3) * (1.0 - y0 / H)
         L = int(H * Ls)
-        tt = t[:L]
+        tt = t[:L] + y0 / H
         curl = rng.uniform(2, 6) * np.sin(2 * np.pi * tt * rng.uniform(1.2, 2.6) + rng.uniform(0, 6.28))
         x = x0 + (W / 2 - x0) * 0.35 * _smoothstep(0.2, 1.0, tt) + curl * tt
         w = rng.uniform(1.2, 1.9) * (1.0 - _smoothstep(0.35, 1.0, tt / Ls) * 0.85)
         lum = rng.uniform(0.68, 1.0) * (0.6 + 0.4 * _smoothstep(0.0, 0.3, tt))
-        lay.draw(Strand(x=x, w=w, lum=lum, rid=rng.uniform(), height=rng.uniform(0.6, 1.0)))
+        lay.draw(Strand(x=x, w=w, lum=lum, rid=rng.uniform(), height=rng.uniform(0.6, 1.0), y0=y0))
     rgba = lay.straight()
     rgba[..., 1] = t[:, None]
     rgba = _fill_transparent(rgba)

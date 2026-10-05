@@ -13,6 +13,8 @@ public enum ClipLibraryError: Error, Equatable, CustomStringConvertible, Sendabl
     case invalidFrameRate(clip: String, fps: Float)
     case nonFiniteValue(clip: String)
     case tooLarge(field: String, value: Int)
+    /// Octets restants après le dernier clip (fichier incohérent).
+    case trailingBytes(count: Int)
 
     public var description: String {
         switch self {
@@ -34,6 +36,8 @@ public enum ClipLibraryError: Error, Equatable, CustomStringConvertible, Sendabl
             return "Clip \(clip) : valeur non finie (NaN/inf)"
         case .tooLarge(let field, let value):
             return "PonyClips.bin : \(field) = \(value) dépasse la limite de sécurité"
+        case .trailingBytes(let count):
+            return "PonyClips.bin : \(count) octet(s) en trop en fin de fichier"
         }
     }
 }

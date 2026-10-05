@@ -128,7 +128,7 @@ class PartBuilder:
         self.ROOTFLAG.append(int(rootflag))
         return len(self.V) - 1
 
-    def add_grid(self, P, UVg, Sg, roots, facing, tag=0, aux=None, root_rows=(0,), flip=False):
+    def add_grid(self, P, UVg, Sg, roots, facing, tag=0, aux=None, root_rows=(0,), flip=False, root_cols=()):
         """Grille (R lignes le long des mèches × C colonnes) : P (R,C,3), UVg (R,C,2), Sg (R,C), roots (C,3),
         facing (R,C,3). Les quads sont orientés pour que la normale géométrique suive `facing`."""
         R, C = P.shape[:2]
@@ -137,7 +137,7 @@ class PartBuilder:
             for c in range(C):
                 idx[r, c] = self.add_vertex(P[r, c], UVg[r, c], Sg[r, c], roots[c], tag,
                                             0.0 if aux is None else aux[c], facing[r, c],
-                                            1 if r in root_rows else 0)
+                                            1 if (r in root_rows or c in root_cols) else 0)
         for r in range(R - 1):
             for c in range(C - 1):
                 q = [idx[r, c], idx[r, c + 1], idx[r + 1, c + 1], idx[r + 1, c]]
@@ -224,6 +224,27 @@ def enforce_clearance(surf, V, S, ROOTFLAG, min_off=0.003, root_depth=0.002, roo
             V[i] = q + n * need
             pushed += 1
     return V, {"pushed": pushed}
+
+
+def enforce_face_clearance(surf, V, F, ROOTFLAG, min_off=0.0015, iters=3):
+    """Seconde passe : si le centre d'une face (sans sommet racine/encastré) passe sous `min_off`, ses sommets
+    sont repoussés du déficit le long de la normale de la peau (surface convexe entre sommets)."""
+    V = V.copy()
+    moved = 0
+    for _ in range(iters):
+        changed = False
+        for f in F:
+            if (ROOTFLAG[f] != 0).any():
+                continue
+            c = V[f].mean(0)
+            q, n, sd, _fi, _bc = surf.nearest(c)
+            if sd < min_off:
+                V[f] += n * (min_off - sd + 1e-4)
+                moved += 1
+                changed = True
+        if not changed:
+            break
+    return V, {"faces_pushed": moved}
 
 
 def penetration_report(surf, V, F, ROOTFLAG, tol=-0.0005):
@@ -420,6 +441,9 @@ def write_part_blend(part_id, arrays, W, path, textures_rel, props=None):
     if "S" in arrays:
         at = me.attributes.new("hair_s", "FLOAT", "POINT")
         at.data.foreach_set("value", np.asarray(arrays["S"], np.float32))
+    if "ROOTFLAG" in arrays:   # 0 ordinaire, 1 racine (sous la peau), 2 encastré (dessous des boutons/nattes)
+        at = me.attributes.new("hair_flag", "INT", "POINT")
+        at.data.foreach_set("value", np.asarray(arrays["ROOTFLAG"], np.int32))
     ob = bpy.data.objects.new(part_id, me)
     bpy.context.scene.collection.objects.link(ob)
     ob.parent = arm
@@ -440,6 +464,7 @@ def write_part_blend(part_id, arrays, W, path, textures_rel, props=None):
     ob["category"] = "hair"
     for k, v in (props or {}).items():
         ob[k] = v
+    bpy.context.preferences.filepaths.save_version = 0      # pas de fichiers .blend1
     bpy.ops.wm.save_as_mainfile(filepath=str(path), compress=True)
     bpy.ops.file.make_paths_relative()            # textures référencées en chemins relatifs (//../textures/…)
     bpy.ops.wm.save_mainfile(compress=True)

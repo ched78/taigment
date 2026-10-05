@@ -64,8 +64,8 @@ struct LookAtLayer {
             PoseEditing.refresh(j, pose: pose, model: &model, parents: parents)
             let lateral = model[j].rotation.act(SIMD3<Float>(1, 0, 0))
             // Tangage autour de l'axe latéral courant du joint (+ = nez vers le haut), puis lacet autour de +Y.
-            let delta = Quat(axis: up, angle: appliedYaw * entry.weight)
-                * Quat(axis: lateral, angle: appliedPitch * entry.weight)
+            let delta = Quat(axis: up, angle: appliedYaw * entry.weight) *
+                Quat(axis: lateral, angle: appliedPitch * entry.weight)
             PoseEditing.rotateInModelSpace(j, delta, pose: &pose, model: &model, parents: parents)
         }
     }
@@ -98,8 +98,8 @@ struct LookAtLayer {
             }
         }
         // Axe local Z de l'œil ≈ haut (saccade horizontale), axe X ≈ latéral (saccade verticale) [I].
-        let saccade = Quat(axis: SIMD3<Float>(0, 0, 1), angle: saccadeX.value * free)
-            * Quat(axis: SIMD3<Float>(1, 0, 0), angle: saccadeY.value * free)
+        let saccade = Quat(axis: SIMD3<Float>(0, 0, 1), angle: saccadeX.value * free) *
+            Quat(axis: SIMD3<Float>(1, 0, 0), angle: saccadeY.value * free)
         pose[j].rotation = (pose[j].rotation * delta * saccade).normalized
     }
 }

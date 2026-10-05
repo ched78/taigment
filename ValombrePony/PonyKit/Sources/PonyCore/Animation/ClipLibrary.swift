@@ -132,6 +132,10 @@ public final class ClipLibrary: @unchecked Sendable {
             out.append(makeClip(name: name, fps: fps, frameCount: frameCount, tracks: tracks,
                                 weights: weights, manifest: manifest, nameToJoint: nameToJoint))
         }
+        // Comme le lecteur de référence (Pipeline/pony/runtime_export.py) : aucun octet en trop.
+        if !reader.isAtEnd {
+            throw ClipLibraryError.trailingBytes(count: reader.remaining)
+        }
         return out
     }
 
@@ -154,7 +158,8 @@ public final class ClipLibrary: @unchecked Sendable {
         return AnimationClip(name: name, fps: fps, frameCount: frameCount, duration: duration, loop: loop,
                              tracks: tracks, weightTracks: weights, jointCount: manifest.joints.count,
                              rootVelocity: velocity, rootYawRate: yaw, maskJoints: mask,
-                             events: meta?.events ?? [], phaseOffset: meta?.phaseOffset ?? 0)
+                             events: meta?.events ?? [], phaseOffset: meta?.phaseOffset ?? 0,
+                             stridesPerClip: meta?.resolvedStridesPerClip ?? 1)
     }
 
     /// Normalise et rend la suite de quaternions continue (même hémisphère d'une image à l'autre).

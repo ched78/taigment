@@ -60,13 +60,17 @@ public struct ProceduralSettings: Sendable, Equatable {
     public var effortRecoveryTime: Float = 25
     public var lockBreathToStride: Bool = true
 
-    // Physique secondaire (étape 8).
+    // Physique secondaire (étape 8). Valeurs [A] choisies par simulation (portage Python) pour un balancement
+    // de queue de ~4–11° au trot/galop (tangage du tronc ±2,3–3,4°) et ≤ 40° (butée) à un arrêt à 1 g.
     public var secondaryEnabled: Bool = true
-    public var tailSpring = SpringParameters(stiffness: 60, damping: 7, gravityBlend: 0.25, maxAngle: 1.0)
-    public var maneSpring = SpringParameters(stiffness: 120, damping: 10, gravityBlend: 0.15, maxAngle: 0.6)
-    public var forelockSpring = SpringParameters(stiffness: 90, damping: 9, gravityBlend: 0.2, maxAngle: 0.6)
-    public var bellySpring = SpringParameters(stiffness: 200, damping: 18, gravityBlend: 0, maxAngle: 0.15)
-    public var stirrupSpring = SpringParameters(stiffness: 30, damping: 3, gravityBlend: 0.9, maxAngle: 1.2)
+    /// Vertèbres de la queue (`tail_01…04`) : raides.
+    public var tailDockSpring = SpringParameters(stiffness: 400, damping: 36, gravityBlend: 0.05, maxAngle: 0.25)
+    /// Crins de la queue (`tail_05…10`).
+    public var tailSpring = SpringParameters(stiffness: 80, damping: 13.4, gravityBlend: 0.2, maxAngle: 0.7)
+    public var maneSpring = SpringParameters(stiffness: 120, damping: 15.3, gravityBlend: 0.15, maxAngle: 0.6)
+    public var forelockSpring = SpringParameters(stiffness: 100, damping: 15, gravityBlend: 0.2, maxAngle: 0.6)
+    public var bellySpring = SpringParameters(stiffness: 200, damping: 25.5, gravityBlend: 0, maxAngle: 0.15)
+    public var stirrupSpring = SpringParameters(stiffness: 30, damping: 3.3, gravityBlend: 0.9, maxAngle: 1.2)
     /// Chasse-mouches : intervalle aléatoire entre deux coups de queue à l'arrêt (s) et intensité (m/s).
     public var tailSwishIntervalMin: Float = 6
     public var tailSwishIntervalMax: Float = 20
@@ -157,11 +161,14 @@ struct ProceduralRig {
 
         neckBend = ["neck_01", "neck_02", "neck_03"].compactMap { skeleton.index(of: $0) }
 
+        // Forme de l'exporteur : {"left": {"base": …, "tip": …}, "right": {…}} ; formes plates tolérées.
         let ears = p.ears
-        earLeft = idx(ears?.firstString(["left", "l", "ear_l"]) ?? "ear_l")
-        earLeftTip = idx(ears?.firstString(["leftTip", "tip_l", "ear_tip_l"]) ?? "ear_tip_l")
-        earRight = idx(ears?.firstString(["right", "r", "ear_r"]) ?? "ear_r")
-        earRightTip = idx(ears?.firstString(["rightTip", "tip_r", "ear_tip_r"]) ?? "ear_tip_r")
+        earLeft = idx(ears?["left"]?.firstString(["base"]) ?? ears?.firstString(["left", "l", "ear_l"]) ?? "ear_l")
+        earLeftTip = idx(ears?["left"]?.firstString(["tip"])
+                         ?? ears?.firstString(["leftTip", "tip_l", "ear_tip_l"]) ?? "ear_tip_l")
+        earRight = idx(ears?["right"]?.firstString(["base"]) ?? ears?.firstString(["right", "r", "ear_r"]) ?? "ear_r")
+        earRightTip = idx(ears?["right"]?.firstString(["tip"])
+                          ?? ears?.firstString(["rightTip", "tip_r", "ear_tip_r"]) ?? "ear_tip_r")
 
         eyes = list(p.eyes, fallback: ["eye_l", "eye_r"])
         eyeLeft = idx(p.eyes.first(where: { $0.hasSuffix("_l") }) ?? "eye_l")

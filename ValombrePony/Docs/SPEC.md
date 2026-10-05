@@ -324,6 +324,17 @@ Ordre d'évaluation par frame :
 ```
 Toutes les données géométriques sont en **espace RealityKit** (Y haut, −Z avant). Quaternions `[x, y, z, w]`.
 
+Précisions d'implémentation (export validé) :
+- `bindModel` = repère **monde** de liaison du joint (pas son inverse), matrice 4×4 colonne-major.
+- `clips[].mask` = `null` ou **liste explicite** de joints (les masques symboliques sont résolus à l'export).
+- `parts[].requires` = « au moins une de ces pièces » ; une seule pièce par `slot`.
+- Durée : clip en boucle = `F / fps` (l'image F, égale à l'image 0, n'est pas stockée) ; clip non bouclé = `(F − 1) / fps`.
+- Les pièces de crins ont un matériau unique (`M_Hair` dans Blender, exporté sous le nom `slot_primary`) dont
+  l'albedo est fourni au runtime par le compositeur de robe à partir de `hair_strands.png` (pas une simple teinte).
+- Clés supplémentaires possibles (à ignorer si inconnues) : `parts[].slots`, `fixedMaterials`, `clips[].fps`,
+  `jointOffsetsMinus`, `coat.usdMaps`, `regionScale`, `procedural.lips`, `procedural.secondary`, `hair.maps`,
+  `rootPivot`, `contacts`, `strideLength`, `strideDuration`, `stridesPerClip`, `footfalls`.
+
 ### `PonyClips.bin` (petit-boutiste)
 ```
 magic "PNYC" | u32 version=1 | u32 clipCount

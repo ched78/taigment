@@ -109,8 +109,8 @@ def place_camera(view: str = "three_quarter", target=(0.0, 0.1, 0.8), distance: 
     cam = bpy.data.objects["PreviewCamera"]
     cam.data.lens = lens
     a, e = math.radians(az), math.radians(el)
-    # côté gauche du poney = -X ; az tourne autour de Z
-    direction = Vector((-math.cos(a) * math.cos(e), math.sin(a) * math.cos(e), math.sin(e)))
+    # az = 0 : caméra côté gauche (-X) ; az = -90 : face (+Y, devant le nez) ; az = +90 : arrière (-Y)
+    direction = Vector((-math.cos(a) * math.cos(e), -math.sin(a) * math.cos(e), math.sin(e)))
     t = Vector(target)
     cam.location = t + direction * distance
     cam.rotation_euler = (t - cam.location).to_track_quat("-Z", "Y").to_euler()

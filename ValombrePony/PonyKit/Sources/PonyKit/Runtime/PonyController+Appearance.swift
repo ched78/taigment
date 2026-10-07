@@ -71,7 +71,7 @@ extension PonyController {
         if movementMode == .characterController, var cc = root.components[CharacterControllerComponent.self] {
             let s = configuration.entityScale
             cc.radius = characterRadius * s
-            cc.height = characterHeight * s
+            cc.height = characterCapsuleHeight
             root.components.set(cc)
             visualRoot.position = SIMD3<Float>(0, -characterCenterHeight, 0)
         }
@@ -238,7 +238,9 @@ extension PonyController {
         isComposingCoat = true
         while let next = coatPending {
             coatPending = nil
-            if next == appliedCoat { continue }
+            // Robe inchangée et texture déjà au moins aussi fine : rien à refaire (ex. curseur de morphologie en
+            // mode interactif après une robe définitive 2048² — sinon deux compositions inutiles).
+            if let done = appliedCoat, done.coat == next.coat, done.resolution >= next.resolution { continue }
             await composeAndApplyCoat(next)
         }
         coatBusy = false
@@ -291,7 +293,8 @@ extension PonyController {
             hairIrisCoat = request.coat
         }
         if let iris = irisTexture {
-            // Hypothèse [I] (Docs/COAT.md §7) : iris centré dans le carré UV de l'œil.
+            // Contrat UV (Docs/COAT.md §7, repris par Pipeline/pony/head_parts.py) : chaque globe occupe le carré
+            // UV [0,1]², iris centré ; rendu à vérifier sur appareil [I].
             bodyMaterials?.setOverride(PonyMaterialNames.eye,
                                        PonyMaterialOverride(tint: PonyColor.white, baseColorTexture: iris))
         }

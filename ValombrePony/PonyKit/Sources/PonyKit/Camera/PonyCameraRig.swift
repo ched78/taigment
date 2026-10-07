@@ -67,6 +67,10 @@ public final class PonyCameraRig {
     private var initialized = false
 
     public init(fieldOfViewInDegrees: Float = 50) {
+        // Enregistrement AVANT tout usage de `PonyCameraComponent` (doc Apple de `Component.registerComponent()` :
+        // « before you use it »). Idempotent ; une caméra peut être créée avant tout poney (valeur par défaut d'un
+        // `@State`, évaluée avant le corps de `init` de la vue).
+        PonyKit.registerSystems()
         entity = Entity()
         entity.name = "PonyCamera"
         entity.components.set(PerspectiveCameraComponent(near: 0.05, far: 400, fieldOfViewInDegrees: fieldOfViewInDegrees))

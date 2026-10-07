@@ -217,7 +217,7 @@ def gallop_spec():
         neck_base=-6.0, neck_ext=6.0, neck_amp=7.0, neck_cycles=1, neck_phase=0.40, head_comp=0.3,
         tail_lift=26.0, tail_gain=1.3, breathe_locked=True,
         notes="Galop transverse à gauche PD→PG→AD→AG puis une suspension (séquence [V] Biancardi & Minetti "
-              "2012) ; décalages de phase et appuis (0,24/0,25) NON vérifiés [U/A] ; phase 0 = poser du "
+              "2012) ; décalages de phase et appuis (0,24/0,25) NON vérifiés [A] ; phase 0 = poser du "
               "postérieur gauche. Flexion/extension lombo-sacrée ±8° et balancier d'encolure [U] ; queue "
               "haute ; respiration 1:1 [U].",
         sources="gaits.md §1.6, §1.9, §2.3, §6")

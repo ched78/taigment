@@ -96,7 +96,9 @@ public final class PonyController {
     /// Derniers évènements (16 au plus), du plus ancien au plus récent.
     @ObservationIgnored public private(set) var recentEvents: [PonyEvent] = []
     /// Capsule du contrôleur de personnage pour un poney de 1,30 m (multipliée par l'échelle) [A] : une capsule
-    /// verticale épouse mal un corps horizontal (realitykit.md §6.4).
+    /// verticale épouse mal un corps horizontal (realitykit.md §6.4). `characterHeight` est la hauteur TOTALE de la
+    /// capsule, hémisphères compris (doc Apple de `CharacterControllerComponent.height` : « The capsule height
+    /// includes radii ») ; elle est portée à `2 × characterRadius` au minimum [I].
     @ObservationIgnored public var characterRadius: Float = 0.42
     @ObservationIgnored public var characterHeight: Float = 1.25
     /// Vitesse de plaquage au sol hors saut (m/s) en mode contrôleur de personnage [I].
@@ -199,7 +201,7 @@ public final class PonyController {
             loadedManifest = try await assets.manifest()
         } catch {
             recordError(error)
-            appendWarning("squelette synthétique utilisé (prototype) : animations et pièces indisponibles")
+            appendWarning("squelette synthétique utilisé (prototype) : aucune animation de clip ; pièces du catalogue du SPEC")
             loadedManifest = PonyRigDefaults.syntheticManifest()
         }
         let clips: ClipLibrary
@@ -457,7 +459,9 @@ public final class PonyController {
         if frame.isAirborne != isAirborne { isAirborne = frame.isAirborne }
         let v = frame.rootVelocity
         let speed = ((v.x * v.x + v.z * v.z).squareRoot() * 10).rounded() / 10
-        if speed.isFinite && abs(speed - displaySpeed) >= 0.1 { displaySpeed = speed }
+        // `speed` est déjà arrondi au dixième : comparer par `!=` (un seuil `>= 0.1` ratait les pas d'un dixième,
+        // p. ex. Float(0.4) − Float(0.3) = 0.099999994 < Float(0.1)).
+        if speed.isFinite && speed != displaySpeed { displaySpeed = speed }
         for e in frame.events {
             recentEvents.append(e)
             onEvent?(e)
@@ -469,11 +473,19 @@ public final class PonyController {
 
     // MARK: Déplacement
 
-    /// Hauteur du centre de la capsule au-dessus du sol : `height / 2 + radius` en supposant, comme PhysX,
-    /// que `height` exclut les hémisphères [I : à vérifier sur appareil, checklist INTEGRATION.md].
+    /// Hauteur totale de la capsule passée à `CharacterControllerComponent` (unités de `root`, échelle incluse).
+    /// Apple : « The capsule height includes radii » (`CharacterControllerComponent.height`). Une capsule ne peut
+    /// pas être plus basse que son diamètre : on borne à `2 × radius` [I : le comportement de RealityKit pour
+    /// `height < 2 × radius` n'est pas documenté ; la borne garde la capsule et le décalage visuel cohérents].
+    var characterCapsuleHeight: Float {
+        return max(characterHeight, 2 * characterRadius) * configuration.entityScale
+    }
+
+    /// Hauteur du centre de la capsule au-dessus du sol : moitié de la hauteur totale (hémisphères compris,
+    /// doc Apple ci-dessus). Le centre de la capsule est supposé à l'origine de `root` [I : à vérifier sur
+    /// appareil, checklist INTEGRATION.md §9].
     var characterCenterHeight: Float {
-        let s = configuration.entityScale
-        return (characterHeight * 0.5 + characterRadius) * s
+        return characterCapsuleHeight * 0.5
     }
 
     func configureMovement() {
@@ -489,7 +501,7 @@ public final class PonyController {
         case .characterController:
             let s = configuration.entityScale
             let wasController = root.components.has(CharacterControllerComponent.self)
-            root.components.set(CharacterControllerComponent(radius: characterRadius * s, height: characterHeight * s))
+            root.components.set(CharacterControllerComponent(radius: characterRadius * s, height: characterCapsuleHeight))
             visualRoot.position = SIMD3<Float>(0, -characterCenterHeight, 0)
             if !wasController {
                 root.position.y += characterCenterHeight

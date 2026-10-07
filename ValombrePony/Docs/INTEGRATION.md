@@ -12,6 +12,10 @@ Légende : **[V]** vérifié dans la documentation Apple (`Tools/apple_doc.py`, 
 > `PonyKit` a été vérifié par analyse syntaxique (`Tools/swift_syntax_check.py`, 0 erreur), relecture « œil de
 > compilateur » et vérification **une par une** des déclarations et disponibilités des API Apple. **Il n'a été
 > ni compilé ni exécuté.** Attendez-vous à quelques corrections de typage à la première compilation dans Xcode.
+> Seule logique exécutée ici : le décodeur PNG intégré (`PonyPNGDecoder`), transcrit ligne à ligne en Python et
+> comparé octet pour octet (45 PNG synthétiques couvrant types de couleur 0/2/3/4/6, profondeurs 1 à 16 bits, les
+> 5 filtres et des IDAT multiples ; 7 cartes réelles du pipeline identiques à Pillow) ; les motifs de tissu
+> (`PonyFabricPatterns`), portés en numpy pour un aperçu visuel.
 
 ---
 
@@ -23,7 +27,7 @@ ValombrePony/PonyKit/                (package Swift local, swift-tools-version 6
 ├─ Sources/PonyCore/                 Swift pur (Foundation) : runtime d'animation, robes, morphologie, règles
 └─ Sources/PonyKit/
    ├─ PonyKit.swift                  PonyKit.registerSystems(), PonyLog (préfixe [PonyKit])
-   ├─ Assets/                        PonyResourceLocator, PonyAssetLibrary, PonyImageIO, erreurs typées
+   ├─ Assets/                        PonyResourceLocator, PonyAssetLibrary, PonyImageIO, PonyPNGDecoder, erreurs typées
    ├─ Rendering/                     PonySkinBinding (pose/poids), PonyMaterials, PonyFabricPatterns
    ├─ Runtime/                       PonyController (+Appearance), PonyComponent, PonyCameraComponent, PonySystem
    ├─ Camera/                        PonyCameraRig (suivi 3e personne, orbite d'écurie)
@@ -32,6 +36,7 @@ ValombrePony/PonyKit/                (package Swift local, swift-tools-version 6
    ├─ Support/                       couleurs, libellés FR, PonyRandomizer, PonyConfigurationStore
    ├─ Views/                         PonyPlaygroundView, PonyStableView (+ éditeurs), HUD
    └─ Resources/                     ← produit par le pipeline (NE PAS éditer à la main)
+      ├─ README.md                    témoin versionné (garantit l'existence du dossier sur un clone propre)
       ├─ Pony.usdz, Pony_QuickLook.usdz, PonyRig.json, PonyClips.bin
       ├─ coat_shading.png, coat_regions.png, coat_params.png, coat_patterns.png, hair_strands.png
       └─ Parts/<id>.usdz              (crins et accessoires, SPEC §6)
@@ -40,7 +45,9 @@ ValombrePony/PonyKit/                (package Swift local, swift-tools-version 6
 Le dossier `Resources/` est copié tel quel dans le bundle du module (`resources: [.copy("Resources")]`) et lu via
 `Bundle.module`. Il est écrit par `python3 Pipeline/stages/s09_export.py` (voir ce script). **Il doit exister
 avant de compiler** : SwiftPM signale une ressource déclarée mais absente [I : erreur ou avertissement selon la
-version de SwiftPM]. Ressources manquantes à l'exécution : voir les replis §4.4.
+version de SwiftPM]. Git ne suivant pas les dossiers vides, `Resources/README.md` est versionné pour que le
+dossier existe sur un clone propre (ne pas le supprimer) ; il est copié dans le bundle mais n'est lu par aucun
+code. Ressources manquantes à l'exécution (dossier présent mais vide) : voir les replis §4.4.
 
 ---
 
@@ -129,8 +136,14 @@ struct MaScene: View {
 Exemple complet (écurie → paddock → intégration manuelle) : `Examples/PonyDemoApp.swift`.
 
 Points d'attention :
-- `PonyKit.registerSystems()` est idempotent et appelé par `PonyController.init` ; l'appeler aussi au démarrage
-  de l'application ne coûte rien.
+- `PonyKit.registerSystems()` est idempotent et appelé par `PonyController.init` et `PonyCameraRig.init`, en
+  tête de chacun, avant de poser `PonyComponent` / `PonyCameraComponent` (Apple, `registerComponent()` : « before
+  you use it ») ;
+  l'appeler aussi au démarrage de l'application (`App.init`) garantit qu'il précède la création de la première
+  `RealityView` (un système enregistré après la création d'une scène y est-il ajouté ? non documenté [I]).
+- `@State private var pony = PonyController(…)` : comme pour tout `@State` initialisé dans une vue, SwiftUI peut
+  évaluer l'initialiseur plusieurs fois et ne garder que la première instance ; les instances jetées ne coûtent
+  que deux `Entity` vides (aucun chargement avant `load()`).
 - Le contrôleur est référencé **faiblement** par son entité (`PonyComponent`) : gardez-le vivant (`@State`,
   modèle de jeu), sinon le poney se fige.
 - Ne jouez **aucune** animation RealityKit sur le poney (`playAnimation`) : la pose est écrite à chaque frame par
@@ -157,7 +170,7 @@ Points d'attention :
 | `earMood` | Humeur des oreilles imposée (`EarMood`) ou `nil`. |
 | `onEvent`, `recentEvents` | Évènements d'animation (`foot_down_*`, `takeoff`, `apex`, `landing`, `tail_swish`, `chew`, `snort`…). |
 | `movementMode` (`.kinematic` / `.characterController`), `groundHeight`, `teleport(to:yaw:)` | Déplacement (§5). |
-| `gait`, `currentAction`, `isAirborne`, `displaySpeed` | État observable (mis à jour seulement quand il change). |
+| `gait`, `currentAction`, `isAirborne`, `displaySpeed` | État observable (mis à jour seulement quand il change ; `displaySpeed` : vitesse horizontale en m/s arrondie au dixième). |
 | `loadState`, `loadErrors`, `warnings`, `usesPlaceholder`, `isComposingCoat`, `accessoryIssues` | Diagnostic observable. |
 | `runtime` (`PonyRuntime`), `manifest`, `rules` (`AccessoryRules`) | Accès avancés (réglages du runtime, catalogue de pièces). |
 | `imageBasedLight` | Entité IBL : ajoute `ImageBasedLightReceiverComponent` à chaque entité modèle du poney. |
@@ -172,11 +185,11 @@ Points d'attention :
 | `PonyComponent`, `PonyCameraComponent` | Liens faibles entité → contrôleur / caméra. |
 | `PonyCameraRig` | `follow(_:)`, `orbit(around:distance:)`, `rotate(yaw:pitch:)`, `zoom(by:)`, `recenter()`, `lookingPony`, réglages de distance/hauteur/lissage. |
 | `PonySceneBuilder` | `makePaddock(size:fenceRadius:locator:) async`, `makeStable(size:locator:) async` → `PonySceneSetup` (`root`, `ground`, `sun`, `imageBasedLight`, `environment`). |
-| `PonyInputState` | Clavier (`handle(_ KeyPress)`), `joystick`, `sprintLatched`, `move`, `sprint`, `onCommand`. |
+| `PonyInputState` (`@MainActor @Observable`) | Clavier (`handle(_ KeyPress)`), `joystick`, `sprintLatched` (seul état observé), `move`, `sprint`, `onCommand`, `releaseAll()`. |
 | `PonyAssetLibrary` (`.shared`) | Cache des ressources (`manifest()`, `clips(for:)`, `coatMaps(for:)`, `instantiateBody()`, `instantiatePart(_:file:)`, `preloadParts(_:)`, `purge()`, `warnings`). |
 | `PonyResourceLocator` | Dossier de ressources (`.bundled` = `Bundle.module`) ; un autre dossier peut être passé (contenu téléchargé). |
 | `PonyAssetError` | Erreurs typées (messages FR) : dossier absent, ressource absente/illisible, manifeste/clips invalides, image, USDZ. |
-| `PonyImageIO` | PNG → `RGBA8Image` octet pour octet (cartes « raw »), `RGBA8Image` → `CGImage`. |
+| `PonyImageIO` | Cartes « raw » → `RGBA8Image` octet pour octet : PNG par le décodeur intégré `PonyPNGDecoder` (exact, indépendant de la gestion d'alpha d'ImageIO), sinon ImageIO ; `RGBA8Image` → `CGImage`. |
 | `PonyConfigurationStore` | JSON dans `Documents/ValombrePony/Poneys/` (`list`, `save`, `load`, `delete`). |
 | `PonyRandomizer` | `plausible(rules:name:)` : poney aléatoire plausible (préréglage, robe, marques, crins, harnachement). |
 | `PonyFabricPatterns` | Motifs de tissu (uni, rayures, carreaux, étoiles, cœurs) → `RGBA8Image`. |
@@ -200,19 +213,26 @@ Points d'attention :
 4. Robe : `CoatCompositor.composeBody` **hors MainActor** (`Task.detached`), 1024² si `interactive`, 2048² sinon,
    puis `TextureResource(image:withName:options:)` (`.color`) sur `M_Coat` ; crins (`composeHair`) sur le
    `slot_primary` de chaque pièce de crins avec `opacityThreshold` 0,4 et `faceCulling = .none` ; iris
-   (`composeIris`) sur `M_Eye`. Une seule composition à la fois ; la demande la plus récente est traitée ensuite.
-   `M_Mouth` est laissé tel qu'exporté.
+   (`composeIris`) sur `M_Eye`. Une seule composition à la fois ; la demande la plus récente est traitée ensuite ;
+   une robe inchangée déjà composée à une résolution au moins égale n'est pas recomposée (un curseur de
+   morphologie ne relance donc pas le compositeur). `M_Mouth` est laissé tel qu'exporté.
+5. Données lues dans `PonyRig.json` en plus de `PonyRigManifest` : `coat.maps` (noms des cartes), `hair.maps.strands`
+   (texture de mèches, écrite par `s09_export.py`), `coat.landmarks` (`coronet`, `faceEyeV`, `faceEyeU`, `nostrilV`,
+   ou en snake_case) → `CoatMaps.landmarks` ; absents → valeurs par défaut (l'export v1 n'écrit pas encore
+   `coat.landmarks` [I]).
 
 ### 4.4 Replis (le jeu reste utilisable)
 | Situation | Repli |
 |---|---|
 | Dossier `Resources/` absent | `PonyAssetError.resourceFolderMissing` journalisé ; manifeste synthétique + substitut primitif. |
-| `PonyRig.json` absent/invalide | `PonyRigDefaults.syntheticManifest()` (squelette du gabarit) ; pas de pièces chargeables. |
+| `PonyRig.json` absent/invalide | `PonyRigDefaults.syntheticManifest()` (squelette du gabarit, catalogue de pièces du SPEC §6, aucun clip) ; les pièces présentes dans `Parts/` restent chargeables (noms de joints du gabarit). |
 | `PonyClips.bin` absent / invalide | `ClipLibrary.empty` : pose de repos + procédural ; le poney se déplace quand même. |
 | Cartes de robe absentes | Robe par défaut de l'USDZ si `coat == .default`, sinon teinte unie (`phenotype.bodyColor`). |
 | `hair_strands.png` absent | Crins teintés (`maneColor`) sur l'albedo d'aperçu de l'USDZ. |
 | `Pony.usdz` absent | `PonyPlaceholder` (silhouette en boîtes colorée d'après la robe) si `allowsPlaceholder`, sinon `.failed`. |
 | Pièce absente | Ignorée, avertissement unique dans `warnings`. |
+| Aucun matériau `slot_*` (ou `slot_primary`/`M_Hair` pour les crins) reconnu dans une pièce | Couleurs d'export conservées ; avertissement listant les noms importés (diagnostic de `Material.name`). |
+| PNG entrelacé, « CgBI » (optimisé par Xcode) ou autre format | Repli ImageIO (avertissement « décodeur PNG intégré en échec ») ; alpha prémultiplié éventuel « déprémultiplié » (approché). |
 
 ---
 
@@ -225,7 +245,9 @@ Points d'attention :
   0,42 × 1,25 m pour 1,30 m, × échelle [A]) et `moveCharacter(by:deltaTime:relativeTo:collisionHandler:)` ;
   hors saut, plaquage au sol à `groundSnapSpeed` ; atterrissage sur `CollisionFlags.bottom`. Le décor doit porter
   des `CollisionComponent` (le paddock en a : sol et poteaux ; les cavalettis n'en ont pas, pour pouvoir être
-  sautés). `visualRoot` est abaissé de `height/2 + radius` (hypothèse PhysX [I], à vérifier §9).
+  sautés). `height` est la hauteur TOTALE de la capsule (doc Apple de `CharacterControllerComponent.height` :
+  « The capsule height includes radii »), bornée à `2 × radius` [I] : `visualRoot` est abaissé de `height/2`
+  (× échelle), soit 0,625 m par défaut ; centre de la capsule supposé à l'origine de `root` [I, à vérifier §9].
 - Une capsule verticale épouse mal un corps horizontal (realitykit.md §6.4) : la tête et la croupe peuvent entrer
   dans les obstacles. Pour un jeu exigeant, ajouter des formes de requête (raycasts) devant/derrière [I].
 
@@ -240,7 +262,7 @@ Points d'attention :
 | Sol non plat (IK des sabots) | `runtime?.groundHeightProvider` (espace modèle) | `nil` = sol plat |
 | Résolution de la robe | `coatPreviewResolution` / `coatFinalResolution` | 1024 / 2048 |
 | Découpe alpha des crins | `hairOpacityThreshold` | 0,4 |
-| Capsule du contrôleur | `characterRadius`, `characterHeight`, `groundSnapSpeed` | 0,42 / 1,25 / 2 m/s |
+| Capsule du contrôleur (`characterHeight` = hauteur totale, hémisphères compris) | `characterRadius`, `characterHeight`, `groundSnapSpeed` | 0,42 / 1,25 / 2 m/s |
 | Caméra de suivi | `PonyCameraRig.followDistance/followHeight/lookHeight/positionHalfLife/focusHalfLife/yawHalfLife/recenterDelay` | 4,2 m / 1,25 / 1,0 / 0,12 s / 0,04 s / 0,45 s / 2,5 s |
 | Orbite d'écurie | `orbitYaw/orbitPitch/orbitDistance/autoRotateSpeed`, `minZoom/maxZoom` | — |
 | Journal sur la sortie standard | `PonyLog.mirrorToStandardOutput = true` | `false` |
@@ -290,7 +312,7 @@ disponibles sur iOS 26 / macOS 26 ; aucune n'est réservée à visionOS ni à iO
 | `System` (`init(scene:)`, `update(context:)`, `registerSystem()`), `Component.registerComponent()` | iOS 15 / macOS 12 (Component : iOS 13) | `PonySystem` |
 | `EntityQuery(where:)`, `QueryPredicate.has(_:)`, `SceneUpdateContext.deltaTime` | iOS 15 / macOS 12 | requêtes |
 | `SceneUpdateContext.entities(matching:updatingSystemWhen:)`, `SystemUpdateCondition.rendering` | iOS 18 / macOS 15 | requêtes |
-| `CharacterControllerComponent(radius:height:…)`, `radius`, `height` | iOS 15 / macOS 12 | déplacement |
+| `CharacterControllerComponent(radius:height:…)`, `radius`, `height` (« The capsule height includes radii ») | iOS 15 / macOS 12 | déplacement |
 | `Entity.moveCharacter(by:deltaTime:relativeTo:collisionHandler:)` → `CollisionFlags` (`.bottom`) | iOS 15 / macOS 12 | déplacement |
 | `Entity.teleportCharacter(to:relativeTo:)` | iOS 15 / macOS 12 | téléportation |
 | `PerspectiveCameraComponent(near:far:fieldOfViewInDegrees:)` | iOS 13 / macOS 10.15 | caméra |
@@ -308,7 +330,7 @@ disponibles sur iOS 26 / macOS 26 ; aucune n'est réservée à visionOS ni à iO
 ### SwiftUI, Observation
 | API | Disponibilité |
 |---|---|
-| `@Observable`, `@ObservationIgnored` | iOS 17 / macOS 14 |
+| `@Observable`, `@ObservationIgnored` (`PonyController`, `PonyInputState`) | iOS 17 / macOS 14 |
 | `onKeyPress(phases:action:)`, `KeyPress.phase/key/modifiers`, `KeyPress.Phases` (`.down/.up/.repeat/.all`), `KeyPress.Result` | iOS 17 / macOS 14 |
 | `KeyEquivalent.upArrow/downArrow/leftArrow/rightArrow/space`, `character` ; `EventModifiers.shift` | iOS 14 / macOS 11 ; iOS 13 / macOS 10.15 |
 | `focusable(_:)` (iOS 17 / macOS 12), `focused(_:)` (iOS 15 / macOS 12), `focusEffectDisabled(_:)` (iOS 17 / macOS 14) | — |
@@ -335,7 +357,8 @@ disponibles sur iOS 26 / macOS 26 ; aucune n'est réservée à visionOS ni à iO
 | `CGColor.converted(to:intent:options:)`, `components` | iOS 9 / macOS 10.11 |
 | `CGImage(width:height:bitsPerComponent:bitsPerPixel:bytesPerRow:space:bitmapInfo:provider:decode:shouldInterpolate:intent:)`, `CGDataProvider(data:)`, `CGImage.dataProvider` | iOS 2 / macOS 10.0–10.4 |
 | `CGImage.byteOrderInfo` | iOS 12 / macOS 10.14 |
-| `CGImageSourceCreateWithURL`, `CGImageSourceCreateImageAtIndex` | iOS 4 / macOS 10.4 |
+| `CGImageSourceCreateWithURL`, `CGImageSourceCreateWithData`, `CGImageSourceCreateImageAtIndex` | iOS 4 / macOS 10.4 |
+| Compression : `compression_decode_buffer(_:_:_:_:_:_:)`, `compression_decode_scratch_buffer_size(_:)`, `COMPRESSION_ZLIB` (documenté : DEFLATE « brut », RFC 1951) | iOS 9 / macOS 10.11 |
 | `URL.startAccessingSecurityScopedResource()` | iOS 8 / macOS 10.10 |
 | `FileManager.url(for:in:appropriateFor:create:)` | iOS 4 / macOS 10.6 |
 | `os.Logger` | iOS 14 / macOS 11 |
@@ -348,10 +371,17 @@ disponibles sur iOS 26 / macOS 26 ; aucune n'est réservée à visionOS ni à iO
   chemin du matériau, noms de poids = noms des `BlendShape`. Le code accepte nom court et chemin.
 - `PerspectiveCameraComponent` d'une entité de la scène utilisé comme point de vue par `RealityView` `.virtual`.
 - Lumière directionnelle orientée selon −Z de son entité.
-- Capsule du contrôleur de personnage centrée sur l'entité, `height` hors hémisphères.
+- Capsule du contrôleur de personnage centrée sur l'entité (la doc Apple dit seulement que `height` inclut les
+  rayons, pas où se trouve l'origine) ; comportement si `height < 2 × radius` (on borne à `2 × radius`).
+- Marge de contact `skinWidth` (« contact offset », `defaultSkinWidth` sans valeur documentée) : elle peut laisser
+  les sabots légèrement au-dessus du sol en mode `.characterController` ; non compensée.
 - `ImageBasedLightReceiverComponent` non hérité (posé sur chaque entité modèle par précaution).
 - `CGImage` RGBA non prémultiplié (`.last`) accepté par `TextureResource(image:…)` pour l'alpha des crins.
-- UV de l'œil : iris centré dans le carré UV (COAT.md §7).
+- UV de l'œil : iris centré dans le carré UV (COAT.md §7 ; contrat repris par `Pipeline/pony/head_parts.py`).
+- Repli ImageIO seulement (le décodeur PNG intégré lit les octets du fichier) : ImageIO ne convertit pas les
+  échantillons et ne prémultiplie pas l'alpha.
+- `compression_decode_buffer` n'exige pas que la source s'arrête exactement à la fin du flux : on lui passe déjà le
+  flux DEFLATE exact (sans en-tête zlib ni Adler-32), hypothèse donc sans effet.
 - Maj seule ne produit pas d'évènement `onKeyPress` sur iOS (utiliser le bouton « Galop »).
 
 ---
@@ -379,6 +409,11 @@ PonyKit. Pour chaque point : appeler `print(controller.diagnosticReport())` et r
 **Limites (realitykit §9.2, usd §7.1)**
 - [ ] 70 joints et ≤ 4 influences par sommet : pas de troncature visible (comparer avec `Pony_QuickLook.usdz`).
 
+**Cartes de pelage**
+- [ ] Aucun avertissement « décodeur PNG intégré en échec » au chargement (sinon : les PNG du bundle ont été
+      retraités — vérifier que `Resources/` est bien copié tel quel, `.copy`, sans optimisation PNG d'Xcode,
+      usd §7.8) ; journal « robe composée en … ms » présent.
+
 **Matériaux et textures (usd §7.4, §7.7–7.8)**
 - [ ] Robe composée appliquée sur `M_Coat` (pas de couture ni de décalage d'UV) ; temps de composition 1024² et
       2048² (journal « robe composée en … ms ») ; mémoire.
@@ -390,8 +425,8 @@ PonyKit. Pour chaque point : appeler `print(controller.diagnosticReport())` et r
 **Animation, déplacement, caméra**
 - [ ] Allures (pas → galop de course) sans patinage ; virages ; reculer ; pivot.
 - [ ] Saut cinématique : décollage, apex, réception (`notifyLanded`), pas de rebond.
-- [ ] Mode `.characterController` : sabots au sol (sinon ajuster `characterHeight`/`characterRadius` ou le décalage
-      `height/2 + radius`), collisions avec la clôture, saut, pentes et marches (realitykit §9.10).
+- [ ] Mode `.characterController` : sabots au sol (sinon vérifier l'hypothèse « centre de la capsule à l'origine
+      de `root` », décalage `height/2`), collisions avec la clôture, saut, pentes et marches (realitykit §9.10).
 - [ ] Caméra de suivi active (le `PerspectiveCameraComponent` est bien utilisé), lissage, orbite, zoom pincé.
 - [ ] Soleil : direction et ombres ; ombres de contact ; IBL (ciel généré) ; `.skybox` affiché.
 

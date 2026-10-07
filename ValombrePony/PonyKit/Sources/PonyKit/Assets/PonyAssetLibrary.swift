@@ -17,7 +17,9 @@ public final class PonyAssetLibrary {
     /// Avertissements non bloquants accumulés (ressource optionnelle absente, repli utilisé…).
     public private(set) var warnings: [String] = []
 
-    private var manifestTask: Task<PonyRigManifest, Error>?
+    private var manifestTask: Task<PonyLoadedManifest, Error>?
+    /// Nom de la texture de mèches lu dans `hair.maps.strands` du manifeste (clé ignorée par `PonyRigManifest`).
+    private var hairStrandsFileName: String?
     private var clipsTask: Task<ClipLibrary, Error>?
     private var coatMapsTask: Task<CoatMaps?, Never>?
     private var templateTasks: [String: Task<Entity, Error>] = [:]
@@ -46,22 +48,31 @@ public final class PonyAssetLibrary {
     /// `PonyRig.json` décodé (erreur typée si absent ou invalide).
     public func manifest() async throws -> PonyRigManifest {
         if let t = manifestTask {
-            return try await t.value
+            return try await t.value.manifest
         }
         let loc = try requireLocator()
-        let task = Task.detached(priority: .userInitiated) { () throws -> PonyRigManifest in
+        let task = Task.detached(priority: .userInitiated) { () throws -> PonyLoadedManifest in
             let data = try loc.data(PonyResourceNames.manifest)
+            let manifest: PonyRigManifest
             do {
-                return try PonyRigManifest.decode(from: data)
+                manifest = try PonyRigManifest.decode(from: data)
             } catch {
                 throw PonyAssetError.invalidManifest(reason: String(describing: error))
             }
+            // Clé `hair.maps.strands` (écrite par s09_export.py, ignorée par `PonyRigManifest`) : relue à part.
+            let top = try? JSONDecoder().decode([String: PonyJSONValue].self, from: data)
+            let strands = top?["hair"]?["maps"]?["strands"]?.stringValue
+            return PonyLoadedManifest(manifest: manifest, hairStrands: strands)
         }
         manifestTask = task
         do {
-            let m = try await task.value
+            let loaded = try await task.value
+            let m = loaded.manifest
             if m.joints.isEmpty {
                 throw PonyAssetError.invalidManifest(reason: "aucun joint")
+            }
+            if let name = loaded.hairStrands, !name.isEmpty {
+                hairStrandsFileName = name
             }
             for issue in m.validationIssues().prefix(8) {
                 warn("PonyRig.json : \(issue)")
@@ -115,7 +126,8 @@ public final class PonyAssetLibrary {
             warn(PonyAssetError.resourceFolderMissing.errorDescription ?? "ressources absentes")
             return nil
         }
-        let names = PonyAssetLibrary.coatMapNames(manifest)
+        let names = PonyAssetLibrary.coatMapNames(manifest, hairStrands: hairStrandsFileName)
+        let landmarks = PonyAssetLibrary.coatLandmarks(manifest)
         let task = Task.detached(priority: .userInitiated) { () -> CoatMaps? in
             func load(_ file: String) -> RGBA8Image? {
                 guard loc.exists(file) else { return nil }
@@ -133,7 +145,7 @@ public final class PonyAssetLibrary {
             let strands = load(names.strands)
             let iris = load(PonyResourceNames.irisDetail)
             return CoatMaps(shading: shading, regions: regions, params: params, patterns: patterns,
-                            hairStrands: strands, irisDetail: iris)
+                            hairStrands: strands, irisDetail: iris, landmarks: landmarks)
         }
         coatMapsTask = task
         let maps = await task.value
@@ -146,15 +158,27 @@ public final class PonyAssetLibrary {
         return maps
     }
 
-    /// Noms des cartes : `coat.maps` / `hair.maps` du manifeste, sinon noms par défaut du SPEC.
-    nonisolated static func coatMapNames(_ manifest: PonyRigManifest)
+    /// Noms des cartes : `coat.maps` / `hair.maps.strands` du manifeste, sinon noms par défaut du SPEC.
+    nonisolated static func coatMapNames(_ manifest: PonyRigManifest, hairStrands: String? = nil)
         -> (shading: String, regions: String, params: String, patterns: String, strands: String) {
         let maps = manifest.coat?["maps"]
         return (maps?["shading"]?.stringValue ?? PonyResourceNames.coatShading,
                 maps?["regions"]?.stringValue ?? PonyResourceNames.coatRegions,
                 maps?["params"]?.stringValue ?? PonyResourceNames.coatParams,
                 maps?["patterns"]?.stringValue ?? PonyResourceNames.coatPatterns,
-                PonyResourceNames.hairStrands)
+                hairStrands ?? PonyResourceNames.hairStrands)
+    }
+
+    /// Repères des cartes (`coat.landmarks` du manifeste, clés camelCase ou snake_case comme `s05_coat.py`), sinon
+    /// `CoatLandmarks.default` [I] : l'export v1 n'écrit pas encore cette clé.
+    nonisolated static func coatLandmarks(_ manifest: PonyRigManifest) -> CoatLandmarks {
+        guard let lm = manifest.coat?["landmarks"] else { return CoatLandmarks.default }
+        var out = CoatLandmarks.default
+        if let v = lm.firstFloat(["coronet"]), v.isFinite { out.coronet = v }
+        if let v = lm.firstFloat(["faceEyeV", "face_eye_v"]), v.isFinite { out.faceEyeV = v }
+        if let v = lm.firstFloat(["faceEyeU", "face_eye_u"]), v.isFinite { out.faceEyeU = v }
+        if let v = lm.firstFloat(["nostrilV", "nostril_v"]), v.isFinite { out.nostrilV = v }
+        return out
     }
 
     // MARK: Modèles
@@ -207,9 +231,16 @@ public final class PonyAssetLibrary {
     /// Vide les caches (les poneys existants gardent leurs clones).
     public func purge() {
         manifestTask = nil
+        hairStrandsFileName = nil
         clipsTask = nil
         coatMapsTask = nil
         templateTasks.removeAll()
         warnings.removeAll()
     }
+}
+
+/// Manifeste décodé + clés supplémentaires lues dans le JSON brut.
+struct PonyLoadedManifest: Sendable {
+    var manifest: PonyRigManifest
+    var hairStrands: String?
 }

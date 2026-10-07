@@ -187,7 +187,7 @@ def head_shake():
     keys = [_k(0.0, _neck(0, 0), {"head": 0, "jaw": 0, "ear_l": 0, "ear_r": 0, "ear_tip_l": 0, "ear_tip_r": 0}),
             _k(0.12, _neck(-6, 0), {"head": -4})]
     # rotation rapide autour de l'axe nuque/encolure (torsion + inclinaison) ~3,3 Hz, décroissante
-    for t, a in _osc(0.15, 1.05, 0.30, 26.0, decay=0.85):
+    for t, a in _osc(0.15, 1.05, 0.30, 32.0, decay=0.85):
         keys.append(_k(t, {n: (-3.0 if a else 0.0, a * w, a * w * 0.4)
                            for n, w in zip(NECK, (0.0, 0.05, 0.12, 0.20, 0.25, 0.28))},
                        {"head": (-3.0 if a else 0.0, a * 0.55, a * 0.25)}))
@@ -350,9 +350,13 @@ def lie_down():
            body=dict(LYING_BODY, pitch=2.0, roll=-10.0, z=-0.58)),
         _k(3.0, lying_pose(), snap=1.0, body=dict(LYING_BODY)),
     ]
-    # antérieurs : plantés (IK) pendant l'agenouillement puis repliés (FK) ; postérieurs repliés à partir de 1,8 s
+    # antérieurs : plantés (IK) pendant l'agenouillement puis repliés (FK) ; postérieurs : pinces plantées (IK,
+    # sabot libre de basculer sur la pince, boulet qui se replie) pendant que l'arrière-main descend, puis repliés
+    # (FK) quand les hanches sont basses — sinon le fondu IK→FK soulève les sabots de ~18 cm en arrière [A]
+    keys += [_k(1.75, hoofw_hl=1.0, hoofw_hr=1.0, fetpref_hl=0.0, fetpref_hr=0.0),
+             _k(2.05, hoofw_hl=0.0, hoofw_hr=0.0, fetpref_hl=-45.0, fetpref_hr=-45.0)]
     fk = [FKSpan("fl", 1.50, dur, blend_in=0.3), FKSpan("fr", 1.52, dur, blend_in=0.3),
-          FKSpan("hl", 1.80, dur, blend_in=0.55), FKSpan("hr", 1.85, dur, blend_in=0.55)]
+          FKSpan("hl", 2.20, dur, blend_in=0.40), FKSpan("hr", 2.25, dur, blend_in=0.40)]
     # rassembler les membres sous le corps avant de se coucher
     steps = [Step("fl", 0.20, 0.55, to=(0.0, -0.18), lift=0.05, carpus=35, flip=20),
              Step("fr", 0.35, 0.70, to=(0.0, -0.18), lift=0.05, carpus=35, flip=20),

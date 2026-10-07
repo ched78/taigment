@@ -258,18 +258,26 @@ def _gif(paths, out, fps, scale=0.7):
 
 
 # vue des planches par clip (défaut : profil gauche) — les mouvements latéraux se lisent mieux de face / de 3/4
-CLIP_VIEWS = {"head_shake": ("front",), "body_shake": ("three_quarter",), "turn_left": ("three_quarter",),
-              "turn_right": ("three_quarter",), "neigh": ("three_quarter",)}
+CLIP_VIEWS = {"head_shake": ("head_front",), "body_shake": ("three_quarter",), "turn_left": ("three_quarter",),
+              "turn_right": ("three_quarter",), "neigh": ("head_3q",)}
 
+# (azimut°, élévation°, distance m[, (dy, z) cible fixe dans le repère de l'entité : gros plan sans élargissement])
 CAM_VIEWS = {"left": (0, 8, 4.6), "side": (0, 0, 6.0), "three_quarter": (-38, 14, 4.8),
-             "front": (-90, 8, 4.6), "back3q": (40, 14, 4.8), "top": (-10, 60, 5.0)}
+             "front": (-90, 8, 4.6), "back3q": (40, 14, 4.8), "top": (-10, 60, 5.0),
+             "head_front": (-90, 8, 2.6, (0.85, 1.15)), "head_3q": (-40, 10, 3.3, (0.45, 0.95))}
+TMP_DIR = cv.BUILD_DIR / "anim_preview_tmp"      # images intermédiaires (hors du dossier livré Previews/)
 
 
 def _cam_on(cam, M, view, fixed=False, zmax=1.6):
     """Caméra qui suit l'entité ; cadrage élargi si le clip monte haut (cabrer : `zmax` = point le plus haut)."""
+    az, el, dist, *close = CAM_VIEWS[view]
+    if close:
+        dy, z = close[0]
+        base = Vector((0.0, 0.0, 0.0)) if fixed else M.translation
+        look(cam, tuple(base + Vector((0.0, dy, z))), az, el, dist)
+        return
     zc = max(0.75, 0.47 * zmax)
     target = (0.0, 0.0, zc) if fixed else tuple(M.translation + Vector((0.0, 0.05, zc)))
-    az, el, dist = CAM_VIEWS[view]
     look(cam, target, az, el, max(dist, 2.45 * zmax))
 
 
@@ -286,7 +294,7 @@ def render_clip(name, arm, cam, clip_dir, out_dir, n_sheet=12, gif=False, views=
     F = local.shape[0]
     scene = bpy.context.scene
     scene.render.resolution_x, scene.render.resolution_y = size
-    tmp = Path(out_dir) / "_tmp"
+    tmp = TMP_DIR
     tmp.mkdir(parents=True, exist_ok=True)
     fps = meta["fps"]
     loop = meta["loop"]
@@ -300,8 +308,9 @@ def render_clip(name, arm, cam, clip_dir, out_dir, n_sheet=12, gif=False, views=
         bpy.context.view_layer.update()
         return arm.matrix_world.copy()
 
-    idx = np.linspace(0, F - (0 if not loop else 1), n_sheet, endpoint=not loop).round().astype(int)
-    idx = np.clip(idx, 0, F - 1)
+    # boucle : n images réparties sur [0, F[ (l'image F = image 0) ; sinon de la première à la dernière image
+    idx = np.linspace(0, F, n_sheet, endpoint=False) if loop else np.linspace(0, F - 1, min(n_sheet, F))
+    idx = np.unique(np.clip(idx.round().astype(int), 0, F - 1))
     if frames is not None:
         idx = np.array(frames)
     paths, labels = [], []
@@ -357,7 +366,7 @@ def render_jump(arm, cam, clip_dir, out_dir, size=(400, 300), n_sheet=12, suffix
     seq, info = sequence.jump_sequence(clip_dir)
     scene = bpy.context.scene
     scene.render.resolution_x, scene.render.resolution_y = size
-    tmp = Path(out_dir) / "_tmp"
+    tmp = TMP_DIR
     tmp.mkdir(parents=True, exist_ok=True)
     fence = _fence(info["fence_y"]) if info.get("fence_y") is not None else None
     paths, labels = [], []

@@ -30,7 +30,7 @@ from scipy.sparse.csgraph import dijkstra
 
 from .body_sdf_lib import unit
 
-DENSITY = {"body": 1.0, "head": 1.6, "ear": 1.35, "leg": 1.3, "hoofwall": 1.15, "sole": 0.6,
+DENSITY = {"body": 1.0, "tail": 1.0, "head": 1.6, "ear": 1.35, "leg": 1.3, "hoofwall": 1.15, "sole": 0.6,
            "pocket_eye": 0.6, "pocket_nostril": 0.45, "pocket_mouth": 0.45}
 LEG_RING_Z = {"f": 0.60, "h": 0.62}          # [I] hauteur (gabarit de référence) des anneaux de coupe des membres
 HEAD_RING_Q = (0.0, 0.835, 1.40)            # [I] point du plan de l'anneau tête/encolure (gabarit, os « head »)
@@ -246,11 +246,16 @@ def compute_seams(g: MeshGraph, sdf, pockets):
     # --- oreilles : anneau de base + ligne arrière
     for side in "lr":
         ea = feats[f"ear_{side}"]
-        t = (V - ea.B) @ ea.e
-        rad = np.linalg.norm((V - ea.B) - t[:, None] * ea.e, axis=1)
-        m = skin_vert & (rad < 0.06 * k) & (t > -0.04 * k) & (t < 0.06 * k)
-        ring = iso_loop(g, t, 0.012 * k, m, lambda P, ea=ea: ea.B + ((P - ea.B) @ ea.e)[:, None] * ea.e, ea.e, ea.f,
-                        band=0.006 * k, n_anchor=8, name=f"ear_ring_{side}")
+        # axe décalé vers le dos du pavillon : il reste dans la matière de l'oreille (l'axe des joints peut traverser
+        # la conque creusée, ce qui donnait une boucle dégénérée de 3 sommets autour du point de perçage)
+        Bc = ea.B - 0.008 * k * ea.f
+        t = (V - Bc) @ ea.e
+        rad = np.linalg.norm((V - Bc) - t[:, None] * ea.e, axis=1)
+        m = skin_vert & (rad > 0.004 * k) & (rad < 0.06 * k) & (t > -0.04 * k) & (t < 0.06 * k)
+        ring = iso_loop(g, t, 0.014 * k, m, lambda P, Bc=Bc, ea=ea: Bc + ((P - Bc) @ ea.e)[:, None] * ea.e, ea.e,
+                        ea.f, band=0.006 * k, n_anchor=8, name=f"ear_ring_{side}")
+        if len(ring) < 12:
+            raise RuntimeError(f"anneau d'oreille {side} dégénéré ({len(ring)} sommets)")
         info[f"ear_ring_{side}"] = ring
         mid, nm = _edge_mid(g)
         tt = (mid - ea.B) @ ea.e
@@ -301,6 +306,20 @@ def compute_seams(g: MeshGraph, sdf, pockets):
     tail_end = nearest(tail_tip, body_ok)
     cost_t = 1.0 + 80.0 * np.abs(mid[:, 0]) / k + 3.0 * np.clip(-(nm[:, 1] - nm[:, 2]) + 0.5, 0, None)
     guided_path(g, pts[-1], tail_end, cost_t, allowed_e, name="tail_ventral")
+    ventral_v = np.zeros(len(V), bool)
+    ventral_v[g.E[g.seam].ravel()] = True
+    ventral_v &= body_ok & (np.abs(V[:, 0]) < 0.02 * k)
+    # --- queue : anneau à la base du tronçon (îlot séparé, ouvert par la ligne ventrale) [I]
+    t0, t1 = rig.jh("tail_01"), rig.jt("tail_01")
+    ta = unit(t1 - t0)
+    ttv = (V - t0) @ ta
+    rad_t = np.linalg.norm((V - t0) - ttv[:, None] * ta, axis=1)
+    mt = body_ok & (rad_t < 0.07 * k) & (ttv > -0.03 * k) & (ttv < 0.08 * k)
+    try:
+        info["tail_ring"] = iso_loop(g, ttv, 0.020 * k, mt, lambda P: t0 + ((P - t0) @ ta)[:, None] * ta, ta,
+                                     np.array([0.0, 0.0, 1.0]), band=0.008 * k, n_anchor=8, name="tail_ring")
+    except RuntimeError as e:  # pragma: no cover - la queue reste dans l'îlot du corps
+        LOG(f"[uv] anneau de queue non créé : {e}")
     # --- membres : anneau, ligne caudo-médiale, couronne, sole, talons
     for key in ("fl", "fr", "hl", "hr"):
         side = key[1]
@@ -346,6 +365,18 @@ def compute_seams(g: MeshGraph, sdf, pockets):
         end = int(cc[np.argmax(unit_rows(Rc) @ unit(-hf.fwd + 0.6 * np.array([-sx, 0, 0]) * 0))])
         # extrémité : sommet de la couronne côté talon (milieu), la ligne passe ensuite derrière le boulet
         guided_path(g, start, end, 1.0 + 5.0 * ang ** 2, allowed, name=f"leg_back_{key}")
+        # face interne du haut du membre : de l'anneau à la ligne ventrale (le corps devient une « peau » à 4
+        # rabats -> beaucoup moins de compression d'aire au dépliage ABF) [I]
+        goal = np.array([0.0, 0.40 * k, 0.70 * k]) if front else np.array([0.0, -0.50 * k, 0.80 * k])
+        tgt_v = nearest(goal, ventral_v)
+        med = -sx * nm[:, 0] / np.maximum(np.linalg.norm(nm, axis=1), 1e-9)
+        cost_in = 1.0 + 3.0 * (1.0 - med) + 2.0 * np.clip(nm[:, 2] + 0.3, 0, None)
+        okx = (mid[:, 0] * sx > -0.004 * k) & (mid[:, 2] < zc + 0.40 * k)
+        allowed_in = allowed_e & okx
+        try:
+            guided_path(g, start, tgt_v, cost_in, allowed_in, name=f"leg_inner_{key}")
+        except RuntimeError as e:  # pragma: no cover
+            LOG(f"[uv] couture interne {key} non créée : {e}")
         # talons : de la couronne (talon) au bord de la sole, au milieu de l'arrière
         sl = np.array(sole)
         Rs = V[sl] - hf.O
@@ -403,6 +434,7 @@ def name_islands(g: MeshGraph, sdf, isl, pockets):
             face_pocket[fi] = name
     probes = {"body": rig.p("spine_02", (0.0, 0.0, 1.25)), "head": rig.jh("head") + 0.25 * unit(
         rig.jt("head") - rig.jh("head")) + np.array([0.0, 0.0, 0.08]) * k}
+    probes["tail"] = 0.5 * (rig.jh("tail_02") + rig.jh("tail_03"))
     for side in "lr":
         ea = feats[f"ear_{side}"]
         probes[f"ear_{side}"] = ea.B + ea.e * 0.7 * ea.length
@@ -468,6 +500,8 @@ def _orient_and_scale(me, isl, isl_names, rig, sdf):
     for i, nm in enumerate(isl_names):
         if nm == "body":
             targets[i] = (np.array([0, 1.0, 0]), np.array([1.0, 0]))
+        elif nm == "tail":
+            targets[i] = (unit(rig.jt("tail_04") - rig.jh("tail_01")), np.array([0, -1.0]))
         elif nm == "head":
             targets[i] = (a, np.array([0, -1.0]))
         elif nm.startswith("ear_"):

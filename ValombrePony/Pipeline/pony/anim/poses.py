@@ -388,7 +388,7 @@ def hoof_targets(sk: Skeleton, ch: Choreo, limb, times, fk_start=None):
         if st.from_fk and fk_start is not None and (limb, st.t0) in fk_start:
             a_toe, a_pitch, fk_c, fk_f = fk_start[(limb, st.t0)]
             a = np.array([a_toe[0], a_toe[1] + v * st.t0, max(a_toe[2], 0.0)])
-            cur_pitch = a_pitch
+            cur_pitch = a_pitch * D          # `fk_start` donne la bascule en degrés (cf. build_choreo)
         if st.to is None:      # rester sur place (xy de départ), descendre au sol
             b = np.array([a[0], a[1] + v * (st.t1 - st.t0), 0.0])
         else:
@@ -469,6 +469,17 @@ def hoof_targets(sk: Skeleton, ch: Choreo, limb, times, fk_start=None):
     return dict(sole=sole, planted=planted, w_rot=w_rot, carpus=carpus, coffin=coffin, fet=fet, free_rot=free_rot)
 
 
+def _smooth_lift(dz, loop, width=5, sigma=1.5):
+    """Correction de hauteur du tronc lissée dans le temps : la contrainte de sol est résolue image par image et
+    change brutalement quand un membre passe de FK (il porte le tronc) à IK (il ne le porte plus) — le tronc
+    tomberait alors de ~10 cm en deux images (`get_up`). Enveloppe (filtre max puis gaussien) jamais inférieure à
+    la correction requise : le tronc peut rester un peu plus haut quelques images, jamais plus bas [I]."""
+    from scipy.ndimage import gaussian_filter1d, maximum_filter1d
+    mode = "wrap" if loop else "nearest"
+    env = gaussian_filter1d(maximum_filter1d(dz, width, mode=mode), sigma, mode=mode)
+    return np.maximum(env, dz)
+
+
 def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
     F = int(round(ch.duration * FPS)) + (0 if ch.loop else 1)
     times = np.arange(F) / FPS
@@ -502,7 +513,8 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
     use_pts = np.array([j not in excl for j in js])
     names_u = np.array(sk.names)[js[use_pts]]
     limb_pts = {l: np.isin(names_u, LIMB_JOINTS[l]) for l in LIMBS}
-    dz = np.zeros(F)
+    dz = np.zeros(F)          # correction de hauteur du tronc appliquée (lissée)
+    dz_raw = np.zeros(F)      # correction requise image par image
     errs = {l: np.zeros(F) for l in LIMBS}
     gfree = {l: np.zeros(F, dtype=bool) for l in LIMBS}
     for l, a, b in ch.ground_free:
@@ -560,10 +572,14 @@ def build_choreo(sk: Skeleton, ch: Choreo, verbose=False) -> Clip:
             sole = sk.sole_world(W, l)[..., 2].min(axis=1)
             zmin = np.where(free, np.minimum(zmin, sole), zmin)
         zt = zmin - 0.002                                      # marge de 2 mm
-        corr = np.where(zt < 0.0, -zt, 0.0) + snap * np.where(zt > 0.0, -zt, 0.0)
-        if np.abs(corr).max() < 2e-4:
+        # hauteur qui pose le point le plus bas à la marge ; sans `snap`, le tronc n'est que relevé (jamais abaissé
+        # sous les clés) ; avec `snap` = 1 il est posé au contact
+        lb = dz - zt
+        dz_raw = (1.0 - snap) * np.maximum(dz_raw, lb) + snap * lb
+        new_dz = _smooth_lift(dz_raw, ch.loop)
+        if np.abs(new_dz - dz).max() < 2e-4:
             break
-        dz = dz + corr
+        dz = new_dz
     trans[:, bj, 2] = tb[:, 2] + dz
     head_corr = np.zeros(F)
     if ch.ground_fix:

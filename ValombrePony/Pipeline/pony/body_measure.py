@@ -73,11 +73,14 @@ def measure_body(sdf, wh_ref=1.30):
     inside = np.flatnonzero(d < 0)
     m["sternum_z"] = float(zz[inside.min()])
     m["chest_depth"] = m["withers_height"] - m["sternum_z"]
-    # tour de poitrine : section y = 0.27 (derrière le coude), contour du tronc seul (exclut les membres)
-    cs, _ = _section(sdf, "y", 0.27, (-0.35, 0.35), (0.62, 1.40), 0.002)
+    # tour de poitrine : section verticale y = 0.27 (juste derrière le coude), mesurée comme un ruban tendu =
+    # périmètre de l'enveloppe convexe du contour du tronc (les membres sont hors de la section à cette abscisse)
+    from scipy.spatial import ConvexHull
+
+    cs, _ = _section(sdf, "y", 0.27, (-0.40, 0.40), (0.55, 1.45), 0.002)
     best = max(cs, key=lambda c: (c[:, 1].max() - c[:, 1].min()))
-    # le contour du tronc peut inclure les coudes : on prend l'enveloppe à z > 0.66
-    m["heart_girth"] = _perimeter(best)
+    hull = best[ConvexHull(best).vertices]
+    m["heart_girth"] = _perimeter(hull)
     m["barrel_width"] = _width(sdf, "y", -0.08, (-0.40, 0.40), (0.60, 1.30))
     # longueur du corps : y max à la pointe de l'épaule (z 0.85..0.95, x 0.10..0.20) ; y min pointe de fesse
     def extreme_y(zr, xr, sign):

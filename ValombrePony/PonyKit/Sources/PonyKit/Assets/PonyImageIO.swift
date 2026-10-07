@@ -7,18 +7,39 @@ import PonyCore
 /// les textures. Fonctions pures, appelables hors du MainActor (`Task.detached`).
 ///
 /// Les cartes du SPEC §4 sont des DONNÉES (« raw ») : aucune conversion de couleur ni prémultiplication ne doit
-/// les altérer. On lit donc directement les octets décodés par ImageIO (`CGImage.dataProvider.data`) en
-/// interprétant la disposition des pixels (8/16 bits, alpha devant/derrière, ordre des octets). Hypothèse [I] :
-/// ImageIO fournit des échantillons non convertis (pas de gestion de couleur à la lecture du fournisseur de
-/// données) ; les PNG du pipeline n'ont pas de profil ICC ni de bloc gAMA (vérifié avec Pillow sur l'export
-/// de test). Un format inattendu passe par un dessin CoreGraphics (repli approché, journalisé).
+/// les altérer. Ordre de lecture :
+/// 1. PNG : décodeur intégré `PonyPNGDecoder` (octets du fichier, exact par construction) ;
+/// 2. sinon (autre format, PNG entrelacé ou « CgBI ») : octets décodés par ImageIO (`CGImage.dataProvider.data`)
+///    en interprétant la disposition des pixels (8/16 bits, alpha devant/derrière, ordre des octets). Hypothèse
+///    [I] : ImageIO fournit des échantillons non convertis (pas de gestion de couleur à la lecture du fournisseur
+///    de données) ; les PNG du pipeline n'ont pas de profil ICC ni de bloc gAMA (vérifié avec Pillow sur les
+///    cartes de `Pipeline/build/textures` et l'export de test) ;
+/// 3. format de pixels inattendu : dessin CoreGraphics (repli approché, journalisé).
 public enum PonyImageIO {
 
     // MARK: Lecture
 
     /// Lit un PNG (ou tout format ImageIO) en RGBA 8 bits, rangées de haut en bas, valeurs brutes.
     public static func loadRGBA8(contentsOf url: URL, name: String) throws -> RGBA8Image {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw PonyAssetError.unreadableResource(name, reason: error.localizedDescription)
+        }
+        return try loadRGBA8(data: data, name: name)
+    }
+
+    /// Variante depuis des octets en mémoire (même ordre de lecture).
+    public static func loadRGBA8(data: Data, name: String) throws -> RGBA8Image {
+        if PonyPNGDecoder.isPNG(data) {
+            do {
+                return try PonyPNGDecoder.decode(data)
+            } catch {
+                PonyLog.warning("« \(name) » : décodeur PNG intégré en échec (\(error)) — repli ImageIO [I]")
+            }
+        }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             throw PonyAssetError.invalidImage(name, reason: "ImageIO ne reconnaît pas le fichier")
         }
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {

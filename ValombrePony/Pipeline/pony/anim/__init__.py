@@ -10,6 +10,7 @@ Modules :
 - `jump`       : saut (appel, vol, réception) ;
 - `clip_io`    : format d'échange `.npz` pour l'agent d'export ;
 - `checks`     : vérifications (patinage, sol, amplitudes, boucles, quaternions) ;
+- `sequence`   : enchaînement du saut simulé comme le runtime (fondus, arc balistique) : aperçu et franchissement ;
 - `preview`    : planches contact et GIF (Blender, Workbench).
 
 Le code de génération est en numpy pur (aucune dépendance à bpy) : seul le squelette de repos est lu

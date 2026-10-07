@@ -367,6 +367,7 @@ def compute_fields(ctx: FieldContext, tx: Texels, log=print):
     k = ctx.k
     P, N = tx.P, tx.N
     names = np.array(ctx.mesh.island_names, object)[tx.isl]
+    isbody = np.isin(names, ["body", "tail"])          # le tronçon de queue est un îlot séparé
     n = len(P)
     out = {}
     feats = sdf.features
@@ -383,7 +384,7 @@ def compute_fields(ctx: FieldContext, tx: Texels, log=print):
     for key, grp in (("fl", "fore_l"), ("fr", "fore_r"), ("hl", "hind_l"), ("hr", "hind_r")):
         isleg = (names == f"leg_{key}") | (names == f"hoofwall_{key}") | (names == f"sole_{key}")
         h = leg_height(ctx, P, key)
-        near = (names == "body") & (dist[grp] < trunk_d - 0.002) & (h < 1.0) & \
+        near = isbody & (dist[grp] < trunk_d - 0.002) & (h < 1.0) & \
                (np.sign(P[:, 0]) == (-1 if key[1] == "l" else 1))
         m = isleg | near
         legh = np.where(m, h, legh)
@@ -425,10 +426,10 @@ def compute_fields(ctx: FieldContext, tx: Texels, log=print):
     for nm in ("pocket_nostril_l", "pocket_nostril_r", "pocket_mouth_roof", "pocket_mouth_floor"):
         rid[names == nm] = REGION_IDS["muzzle"]
     # --- peau nue ventrale (aine / périnée)
-    groin = (names == "body") & (np.abs(P[:, 0]) < 0.075 * k) & (P[:, 1] < -0.28 * k) & (P[:, 1] > -0.66 * k) & \
+    groin = isbody & (np.abs(P[:, 0]) < 0.075 * k) & (P[:, 1] < -0.28 * k) & (P[:, 1] > -0.66 * k) & \
             (N[:, 2] < -0.25) & (P[:, 2] < 0.98 * k)
     anus_c = rig.p("hips", (0.0, -0.785, 1.10))
-    perineum = (names == "body") & (np.linalg.norm(P - anus_c, axis=1) < 0.035 * k)
+    perineum = isbody & (np.linalg.norm(P - anus_c, axis=1) < 0.035 * k)
     rid[groin | perineum] = REGION_IDS["ventral_skin"]
     out["region"] = rid
     # --- extrémités (points)
@@ -443,13 +444,13 @@ def compute_fields(ctx: FieldContext, tx: Texels, log=print):
         rimv = np.abs(N @ ea.g)
         e = np.maximum(_smooth(0.62, 0.85, t), _smooth(0.55, 0.85, rimv) * (rid == REGION_IDS["ear_outer"]))
         ext[m] = e[m]
-    ext[tail & (names == "body")] = 1.0
+    ext[tail & isbody] = 1.0
     out["extremities"] = ext
     # --- pangaré
     pan = np.zeros(n)
     pan = np.maximum(pan, _smooth(muzzle_s - 0.03 * k, muzzle_s + 0.03 * k, s_ax) * (head | muzzle))
     pan = np.maximum(pan, eye_prox * (head | peri))
-    belly = _smooth(-0.15, -0.75, N[:, 2]) * _smooth(0.95 * k, 0.80 * k, P[:, 2]) * (names == "body")
+    belly = _smooth(-0.15, -0.75, N[:, 2]) * _smooth(0.95 * k, 0.80 * k, P[:, 2]) * isbody
     pan = np.maximum(pan, belly)
     for key, grp in (("fl", "fore_l"), ("fr", "fore_r"), ("hl", "hind_l"), ("hr", "hind_r")):
         sx = -1.0 if key[1] == "l" else 1.0
@@ -460,14 +461,14 @@ def compute_fields(ctx: FieldContext, tx: Texels, log=print):
     # --- charbonné
     drop = ctx.topline_drop(P)
     dorsal = _smooth(0.10, 0.75, N[:, 2]) * _smooth(0.32 * k, 0.05 * k, drop)
-    sooty = dorsal * ((names == "body") & ~tail) * (0.75 + 0.25 * fbm3(P, 0.12 * k, 3, seed=31))
+    sooty = dorsal * (isbody & ~tail) * (0.75 + 0.25 * fbm3(P, 0.12 * k, 3, seed=31))
     out["sooty"] = np.clip(sooty, 0, 1)
     # --- coordonnées faciales
     fu, fv = ctx.face_uv(P)
     facial = head | muzzle | inner | (rid == REGION_IDS["ear_outer"]) | peri | \
         np.isin(names, ["pocket_nostril_l", "pocket_nostril_r", "pocket_mouth_roof", "pocket_mouth_floor",
                         "pocket_eye_l", "pocket_eye_r"])
-    near_head = (names == "body") & (s_ax > -0.12 * k)
+    near_head = isbody & (s_ax > -0.12 * k)
     out["face_u"] = np.where(facial | near_head, fu, 0.5)
     out["face_v"] = np.where(facial | near_head, fv, 1.0)
     out["leg_height"] = legh
@@ -475,7 +476,7 @@ def compute_fields(ctx: FieldContext, tx: Texels, log=print):
     lat = np.abs(P[:, 0])
     d = np.sqrt(lat ** 2 + np.maximum(drop, 0) ** 2)
     poll_y = rig.jh("head")[1]
-    on_back = ((names == "body") & ~tail) & (P[:, 1] < poll_y - 0.01 * k)
+    on_back = (isbody & ~tail) & (P[:, 1] < poll_y - 0.01 * k)
     stripe = np.clip(1.0 - d / (0.045 * k), 0, 1) * on_back * _smooth(0.0, 0.3, N[:, 2] + 0.2)
     # queue : face postérieure du tronçon
     tstripe = np.clip(1.0 - lat / (0.022 * k), 0, 1) * tail * _smooth(0.0, 0.5, -N[:, 1] + 0.2 * N[:, 2])
@@ -484,17 +485,17 @@ def compute_fields(ctx: FieldContext, tx: Texels, log=print):
     zz = (w_top[2] - P[:, 2]) / k
     width = (0.034 - 0.10 * np.clip(zz, 0, 0.22)) * k
     bar = np.clip(1.0 - np.abs(P[:, 1] - yb) / np.maximum(width, 1e-3), 0, 1) * _smooth(0.24, 0.12, zz) * \
-        (names == "body") * (np.abs(P[:, 0]) < 0.26 * k)
+        isbody * (np.abs(P[:, 0]) < 0.26 * k)
     out["dorsal"] = np.clip(np.maximum(np.maximum(stripe, tstripe), bar), 0, 1)
     # --- motifs (champs 3D)
     w_area = np.ones(n)
     n1 = fbm3(P, 0.32 * k, 3, seed=1)
-    flank = _smooth(0.95 * k, 0.75 * k, P[:, 2]) * (names == "body")
+    flank = _smooth(0.95 * k, 0.75 * k, P[:, 2]) * isbody
     tob = 0.60 * n1 + 0.40 * (1 - legh) * (leg_key != "") + 0.20 * flank - 0.45 * (head | muzzle)
     out["pat_tobiano"] = rank_normalize(tob, w_area)
     n2 = fbm3(P, 0.16 * k, 4, seed=2, gain=0.6)
     ventral = _smooth(1.05 * k, 0.65 * k, P[:, 2])
-    ov = 0.55 * n2 + 0.45 * ventral * (names == "body") + 0.30 * (head | muzzle) - 0.5 * _smooth(0.4, 0.9, N[:, 2]) * (
+    ov = 0.55 * n2 + 0.45 * ventral * isbody + 0.30 * (head | muzzle) - 0.5 * _smooth(0.4, 0.9, N[:, 2]) * (
         drop < 0.15 * k)
     out["pat_overo"] = rank_normalize(ov, w_area)
     # taches (léopard) : cellules de Worley sur la surface

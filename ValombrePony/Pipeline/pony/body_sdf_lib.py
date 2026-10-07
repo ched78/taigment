@@ -20,15 +20,32 @@ BIG = F32(10.0)
 # Opérateurs lisses
 # ----------------------------------------------------------------------------------------------
 def smin(a, b, k):
-    """Union lisse polynomiale (quadratique). k = largeur du raccord (m)."""
-    if k <= 0.0:
+    """Union lisse polynomiale (quadratique). k = largeur du raccord (m) : scalaire ou tableau (k variable
+    dans l'espace, cf. `VarK`)."""
+    if np.isscalar(k) and k <= 0.0:
         return np.minimum(a, b)
+    k = np.maximum(k, 1e-6)
     h = np.clip(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
     return b + (a - b) * h - k * h * (1.0 - h)
 
 
+class VarK:
+    """Largeur de raccord variable dans l'espace pour une union lisse : k(P) = fn(P), bornée par kmax.
+
+    Une union lisse à k constant « gonfle » la surface (jusqu'à k/4) partout où les deux surfaces sont proches et
+    parallèles (ex. crête de l'encolure sur le garrot) ; un k variable garde un grand raccord là où il faut
+    (gorge, poitrail) et un raccord serré ailleurs [I]."""
+
+    def __init__(self, fn, kmax):
+        self.fn = fn
+        self.kmax = float(kmax)
+
+    def __call__(self, P):
+        return np.clip(self.fn(P), 1e-4, self.kmax).astype(F32)
+
+
 def smax(a, b, k):
-    if k <= 0.0:
+    if np.isscalar(k) and k <= 0.0:
         return np.maximum(a, b)
     return -smin(-a, -b, k)
 
@@ -472,10 +489,12 @@ class Group:
             return child
         lo = np.asarray(child.lo, F32)
         hi = np.asarray(child.hi, F32)
-        self.nodes.append((op, child, float(k), lo, hi))
+        kk = k if isinstance(k, VarK) else float(k)
+        km = kk.kmax if isinstance(kk, VarK) else kk
+        self.nodes.append((op, child, kk, lo, hi))
         if op == "U":
-            self.lo = np.minimum(self.lo, lo - k)
-            self.hi = np.maximum(self.hi, hi + k)
+            self.lo = np.minimum(self.lo, lo - km)
+            self.hi = np.maximum(self.hi, hi + km)
         return child
 
     def _arrays(self):
@@ -485,7 +504,7 @@ class Group:
             hi = np.array([n[4] for n in self.nodes], F32).reshape(-1, 3)
             # rayon d'influence d'un nœud : son propre k ET le k des unions lisses suivantes (un nœud élagué
             # changerait le résultat de smin(d, v, k) jusqu'à k de sa surface -> discontinuité entre blocs)
-            ks = np.array([n[2] for n in self.nodes], F32)
+            ks = np.array([n[2].kmax if isinstance(n[2], VarK) else n[2] for n in self.nodes], F32)
             kmax_after = np.maximum.accumulate(ks[::-1])[::-1] if len(ks) else ks
             ext = np.array([kmax_after[i] + getattr(n[1], "pad", 0.0) for i, n in enumerate(self.nodes)], F32)
             self._cache = c = (len(self.nodes), lo, hi, ext)
@@ -498,7 +517,11 @@ class Group:
         d = None
         for j in np.flatnonzero(rel):
             op, ch, k, clo, chi = self.nodes[j]
-            v = ch.eval_box(P, lo, hi, margin) if isinstance(ch, Group) else ch.eval(P)
+            # un sous-groupe doit rester exact jusqu'à (marge + largeur de raccord des unions qui le suivent) :
+            # sinon ses enfants sont élagués trop tôt -> discontinuité aux frontières de blocs
+            v = ch.eval_box(P, lo, hi, margin + float(ext[j])) if isinstance(ch, Group) else ch.eval(P)
+            if isinstance(k, VarK):
+                k = k(P)
             if d is None:
                 if op == "U":
                     d = v

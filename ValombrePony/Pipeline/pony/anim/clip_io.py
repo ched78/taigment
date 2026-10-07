@@ -32,7 +32,7 @@ CLIP_DIR = cv.BUILD_DIR / "clips"
 def b2rk_vec(v):
     """Vecteur Blender -> RealityKit : (x, y, z) -> (x, z, −y)."""
     v = np.asarray(v, dtype=np.float64)
-    return [float(v[0]), float(v[2]), float(-v[1])]
+    return [float(v[0]) + 0.0, float(v[2]) + 0.0, float(-v[1]) + 0.0]      # + 0.0 : pas de « −0.0 » dans le JSON
 
 
 @dataclass

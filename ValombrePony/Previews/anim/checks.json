@@ -22,7 +22,7 @@
    "slip_max_mm": 2.9835710390236725e-08,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 245.76426891070048,
-   "distal_min_z_mm": 36.02647314394275,
+   "distal_min_z_mm": 36.02592321475047,
    "lowest_point": {
     "bone": "front_pastern_r",
     "frame": 42,
@@ -60,9 +60,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 23.9,
+   "gen_time_s": 13.1,
    "npz": "Pipeline/build/clips/idle.npz",
-   "npz_bytes": 418529,
+   "npz_bytes": 418569,
    "blocking": []
   },
   "walk": {
@@ -72,11 +72,11 @@
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999989,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.05,
-   "hoof_min_z_mm": -0.00025708419491149437,
+   "hoof_min_z_mm": -0.0002570719968841839,
    "slip_mm_per_frame": {
     "fl": 0.021,
     "fr": 0.021,
@@ -84,13 +84,13 @@
     "hr": 0.016
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.02105177854133123,
+   "slip_max_mm": 0.021051731275592987,
    "hoof_gap_min_m": 0.5682,
-   "body_min_z_mm": 203.51783584484897,
-   "distal_min_z_mm": 35.40887532356603,
+   "body_min_z_mm": 203.51807919660308,
+   "distal_min_z_mm": 35.41174084108578,
    "lowest_point": {
-    "bone": "front_pastern_r",
-    "frame": 27,
+    "bone": "front_pastern_l",
+    "frame": 11,
     "z_mm": 35.4
    },
    "fetlock_hyper_max_deg": {
@@ -113,21 +113,21 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 9.002,
+    "rot_deg": 9.01,
     "pos_mm": 122.56
    },
    "loop_other_step_max": {
-    "rot_deg": 21.896,
+    "rot_deg": 21.883,
     "pos_mm": 134.77
    },
    "loop_seam_acc_mm": 52.63,
-   "loop_acc_max_other_mm": 71.12,
+   "loop_acc_max_other_mm": 73.33,
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 36.0,
+   "gen_time_s": 13.7,
    "npz": "Pipeline/build/clips/walk.npz",
-   "npz_bytes": 90104,
+   "npz_bytes": 90040,
    "blocking": []
   },
   "trot": {
@@ -136,12 +136,12 @@
    "duration": 0.666667,
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.9999999999999989,
+   "rot_det_min": 0.999999999999999,
    "quat_norm_err": 2.220446049250313e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 0.66,
-   "hoof_min_z_mm": -0.00017483828262943035,
+   "hoof_min_z_mm": -0.0001748131912629458,
    "slip_mm_per_frame": {
     "fl": 0.029,
     "fr": 0.029,
@@ -149,10 +149,10 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.029000853542929476,
-   "hoof_gap_min_m": 0.2135,
-   "body_min_z_mm": 235.37731285553184,
-   "distal_min_z_mm": 34.9417681078226,
+   "slip_max_mm": 0.029000691044619536,
+   "hoof_gap_min_m": 0.2139,
+   "body_min_z_mm": 235.37618758050195,
+   "distal_min_z_mm": 34.942323346414284,
    "lowest_point": {
     "bone": "front_pastern_l",
     "frame": 13,
@@ -178,21 +178,21 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 21.463,
-    "pos_mm": 85.64
+    "rot_deg": 21.397,
+    "pos_mm": 85.48
    },
    "loop_other_step_max": {
     "rot_deg": 30.579,
     "pos_mm": 139.9
    },
-   "loop_seam_acc_mm": 136.11,
-   "loop_acc_max_other_mm": 136.1,
+   "loop_seam_acc_mm": 135.75,
+   "loop_acc_max_other_mm": 135.75,
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 26.9,
+   "gen_time_s": 12.0,
    "npz": "Pipeline/build/clips/trot.npz",
-   "npz_bytes": 53185,
+   "npz_bytes": 53119,
    "blocking": []
   },
   "canter_left": {
@@ -201,12 +201,12 @@
    "duration": 0.566667,
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.9999999999999989,
+   "rot_det_min": 0.999999999999999,
    "quat_norm_err": 2.220446049250313e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 0.57,
-   "hoof_min_z_mm": -0.00021207327914607443,
+   "hoof_min_z_mm": -0.00021123176743159666,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.001,
@@ -214,10 +214,10 @@
     "hr": 0.038
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.038067171304123286,
+   "slip_max_mm": 0.038067170889562796,
    "hoof_gap_min_m": 0.493,
-   "body_min_z_mm": 248.3301717237125,
-   "distal_min_z_mm": 33.54166690607241,
+   "body_min_z_mm": 248.32797698860233,
+   "distal_min_z_mm": 33.54410294824793,
    "lowest_point": {
     "bone": "front_pastern_l",
     "frame": 6,
@@ -243,15 +243,15 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 26.97,
+    "rot_deg": 26.969,
     "pos_mm": 158.78
    },
    "loop_other_step_max": {
     "rot_deg": 41.999,
-    "pos_mm": 170.81
+    "pos_mm": 170.82
    },
-   "loop_seam_acc_mm": 121.12,
-   "loop_acc_max_other_mm": 114.79,
+   "loop_seam_acc_mm": 121.76,
+   "loop_acc_max_other_mm": 114.81,
    "warnings": [],
    "weights": {
     "body_breathe": [
@@ -264,9 +264,9 @@
     ]
    },
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 21.2,
+   "gen_time_s": 9.2,
    "npz": "Pipeline/build/clips/canter_left.npz",
-   "npz_bytes": 46564,
+   "npz_bytes": 46573,
    "blocking": []
   },
   "canter_right": {
@@ -275,12 +275,12 @@
    "duration": 0.566667,
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.9999999999999989,
+   "rot_det_min": 0.999999999999999,
    "quat_norm_err": 2.220446049250313e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 0.57,
-   "hoof_min_z_mm": -0.00023204898972478682,
+   "hoof_min_z_mm": -0.00023121755508836994,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -288,10 +288,10 @@
     "hr": 0.024
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.024074785206447125,
+   "slip_max_mm": 0.02407479714916713,
    "hoof_gap_min_m": 0.4783,
-   "body_min_z_mm": 246.25119479966293,
-   "distal_min_z_mm": 33.61133729751567,
+   "body_min_z_mm": 246.2503344519276,
+   "distal_min_z_mm": 33.613978230041695,
    "lowest_point": {
     "bone": "front_pastern_r",
     "frame": 10,
@@ -308,7 +308,7 @@
     "r": 85.0
    },
    "recip_dev_max_deg": {
-    "l": 2.52,
+    "l": 2.51,
     "r": 0.42
    },
    "ao_flex_range_deg": [
@@ -317,15 +317,15 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 30.416,
+    "rot_deg": 30.396,
     "pos_mm": 128.12
    },
    "loop_other_step_max": {
     "rot_deg": 42.544,
     "pos_mm": 170.89
    },
-   "loop_seam_acc_mm": 112.09,
-   "loop_acc_max_other_mm": 113.53,
+   "loop_seam_acc_mm": 112.12,
+   "loop_acc_max_other_mm": 114.14,
    "warnings": [],
    "weights": {
     "body_breathe": [
@@ -338,9 +338,9 @@
     ]
    },
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 23.3,
+   "gen_time_s": 9.2,
    "npz": "Pipeline/build/clips/canter_right.npz",
-   "npz_bytes": 46472,
+   "npz_bytes": 46464,
    "blocking": []
   },
   "gallop": {
@@ -349,12 +349,12 @@
    "duration": 0.466667,
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.999999999999999,
+   "rot_det_min": 0.9999999999999988,
    "quat_norm_err": 2.220446049250313e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 0.46,
-   "hoof_min_z_mm": -0.00017201453553217227,
+   "hoof_min_z_mm": -0.0001717029860653918,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -362,10 +362,10 @@
     "hr": 0.035
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.034526094546222824,
+   "slip_max_mm": 0.034526096363893345,
    "hoof_gap_min_m": 0.2552,
-   "body_min_z_mm": 297.82248883282733,
-   "distal_min_z_mm": 33.45645071055463,
+   "body_min_z_mm": 297.8999516619538,
+   "distal_min_z_mm": 33.455656718159716,
    "lowest_point": {
     "bone": "front_pastern_r",
     "frame": 5,
@@ -383,7 +383,7 @@
    },
    "recip_dev_max_deg": {
     "l": 0.46,
-    "r": 2.3
+    "r": 2.31
    },
    "ao_flex_range_deg": [
     -2.5,
@@ -391,15 +391,15 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 40.284,
+    "rot_deg": 40.254,
     "pos_mm": 269.3
    },
    "loop_other_step_max": {
     "rot_deg": 63.65,
-    "pos_mm": 279.34
+    "pos_mm": 279.33
    },
-   "loop_seam_acc_mm": 144.72,
-   "loop_acc_max_other_mm": 211.22,
+   "loop_seam_acc_mm": 144.71,
+   "loop_acc_max_other_mm": 210.9,
    "warnings": [],
    "weights": {
     "body_breathe": [
@@ -412,9 +412,9 @@
     ]
    },
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 19.8,
+   "gen_time_s": 8.9,
    "npz": "Pipeline/build/clips/gallop.npz",
-   "npz_bytes": 39743,
+   "npz_bytes": 39731,
    "blocking": []
   },
   "back": {
@@ -423,12 +423,12 @@
    "duration": 1.2,
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.999999999999999,
-   "quat_norm_err": 2.220446049250313e-16,
+   "rot_det_min": 0.9999999999999989,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.2,
-   "hoof_min_z_mm": -0.00022582239809360027,
+   "hoof_min_z_mm": -0.00022501123161239311,
    "slip_mm_per_frame": {
     "fl": 0.02,
     "fr": 0.02,
@@ -436,10 +436,10 @@
     "hr": 0.025
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.02505892535151301,
+   "slip_max_mm": 0.02505892535106892,
    "hoof_gap_min_m": 0.3612,
-   "body_min_z_mm": 177.72290360222948,
-   "distal_min_z_mm": 35.46943407213654,
+   "body_min_z_mm": 177.72290339795492,
+   "distal_min_z_mm": 35.46947454792608,
    "lowest_point": {
     "bone": "front_pastern_l",
     "frame": 20,
@@ -465,21 +465,21 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 2.458,
+    "rot_deg": 2.464,
     "pos_mm": 20.12
    },
    "loop_other_step_max": {
     "rot_deg": 13.159,
-    "pos_mm": 90.65
+    "pos_mm": 90.68
    },
    "loop_seam_acc_mm": 25.42,
-   "loop_acc_max_other_mm": 38.78,
+   "loop_acc_max_other_mm": 38.79,
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 28.2,
+   "gen_time_s": 10.5,
    "npz": "Pipeline/build/clips/back.npz",
-   "npz_bytes": 89893,
+   "npz_bytes": 89853,
    "blocking": []
   },
   "turn_left": {
@@ -493,18 +493,18 @@
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.4,
-   "hoof_min_z_mm": -0.004770780509588679,
+   "hoof_min_z_mm": -0.0047564978114950085,
    "slip_mm_per_frame": {
-    "fl": 0.008,
-    "fr": 0.139,
+    "fl": 0.006,
+    "fr": 0.144,
     "hl": 0.003,
     "hr": 0.003
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.13913025731471007,
-   "hoof_gap_min_m": 0.1081,
-   "body_min_z_mm": 174.84181873834785,
-   "distal_min_z_mm": 35.61293111771678,
+   "slip_max_mm": 0.14360926261743293,
+   "hoof_gap_min_m": 0.1078,
+   "body_min_z_mm": 174.82955574311822,
+   "distal_min_z_mm": 35.61394013824126,
    "lowest_point": {
     "bone": "front_pastern_r",
     "frame": 41,
@@ -513,7 +513,7 @@
    "fetlock_hyper_max_deg": {
     "front_l": 40.0,
     "hind_l": 30.8,
-    "front_r": 47.5,
+    "front_r": 47.2,
     "hind_r": 30.8
    },
    "carpus_flex_max_deg": {
@@ -530,21 +530,21 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 13.949,
-    "pos_mm": 89.79
+    "rot_deg": 14.066,
+    "pos_mm": 89.66
    },
    "loop_other_step_max": {
-    "rot_deg": 38.225,
-    "pos_mm": 135.13
+    "rot_deg": 37.75,
+    "pos_mm": 136.55
    },
-   "loop_seam_acc_mm": 124.66,
-   "loop_acc_max_other_mm": 125.38,
+   "loop_seam_acc_mm": 126.04,
+   "loop_acc_max_other_mm": 126.65,
    "warnings": [],
    "weights": {},
-   "ik_err_max_mm": 0.139,
-   "gen_time_s": 58.5,
+   "ik_err_max_mm": 0.144,
+   "gen_time_s": 25.7,
    "npz": "Pipeline/build/clips/turn_left.npz",
-   "npz_bytes": 109103,
+   "npz_bytes": 108950,
    "blocking": []
   },
   "turn_right": {
@@ -554,29 +554,29 @@
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999989,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 3.3306690738754696e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.4,
-   "hoof_min_z_mm": -0.004770706162809946,
+   "hoof_min_z_mm": -0.004756448640605426,
    "slip_mm_per_frame": {
-    "fl": 0.139,
-    "fr": 0.008,
+    "fl": 0.144,
+    "fr": 0.006,
     "hl": 0.003,
     "hr": 0.003
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.13913024049203718,
-   "hoof_gap_min_m": 0.1081,
-   "body_min_z_mm": 174.2762845232743,
-   "distal_min_z_mm": 35.612924943122515,
+   "slip_max_mm": 0.14360928253208366,
+   "hoof_gap_min_m": 0.1078,
+   "body_min_z_mm": 174.2638799106791,
+   "distal_min_z_mm": 35.613934170576805,
    "lowest_point": {
     "bone": "front_pastern_l",
     "frame": 6,
     "z_mm": 35.6
    },
    "fetlock_hyper_max_deg": {
-    "front_l": 47.5,
+    "front_l": 47.2,
     "hind_l": 30.8,
     "front_r": 40.0,
     "hind_r": 30.8
@@ -595,21 +595,21 @@
    ],
    "limit_violations": [],
    "loop_seam_step": {
-    "rot_deg": 11.392,
-    "pos_mm": 99.45
+    "rot_deg": 9.121,
+    "pos_mm": 99.3
    },
    "loop_other_step_max": {
-    "rot_deg": 38.255,
-    "pos_mm": 135.13
+    "rot_deg": 37.766,
+    "pos_mm": 138.38
    },
-   "loop_seam_acc_mm": 119.27,
-   "loop_acc_max_other_mm": 125.01,
+   "loop_seam_acc_mm": 127.4,
+   "loop_acc_max_other_mm": 128.72,
    "warnings": [],
    "weights": {},
-   "ik_err_max_mm": 0.139,
-   "gen_time_s": 72.7,
+   "ik_err_max_mm": 0.144,
+   "gen_time_s": 25.2,
    "npz": "Pipeline/build/clips/turn_right.npz",
-   "npz_bytes": 109170,
+   "npz_bytes": 108974,
    "blocking": []
   },
   "idle_rest_hind": {
@@ -634,10 +634,10 @@
    "slip_max_mm": 3.998341039503226e-08,
    "hoof_gap_min_m": 0.24,
    "body_min_z_mm": 248.29210482402976,
-   "distal_min_z_mm": 35.99292442465761,
+   "distal_min_z_mm": 35.991653527952735,
    "lowest_point": {
     "bone": "front_pastern_r",
-    "frame": 44,
+    "frame": 45,
     "z_mm": 36.0
    },
    "fetlock_hyper_max_deg": {
@@ -672,9 +672,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 16.7,
+   "gen_time_s": 9.0,
    "npz": "Pipeline/build/clips/idle_rest_hind.npz",
-   "npz_bytes": 398244,
+   "npz_bytes": 398304,
    "blocking": []
   },
   "graze_down": {
@@ -688,7 +688,7 @@
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.5,
-   "hoof_min_z_mm": -1.3445281527024733e-05,
+   "hoof_min_z_mm": -1.3491501450746402e-05,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -699,7 +699,7 @@
    "slip_max_mm": 4.407078914528009e-08,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 15.01540970915971,
-   "distal_min_z_mm": 34.11504829664225,
+   "distal_min_z_mm": 34.11816430973445,
    "lowest_point": {
     "bone": "head",
     "frame": 45,
@@ -727,9 +727,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 6.0,
+   "gen_time_s": 2.6,
    "npz": "Pipeline/build/clips/graze_down.npz",
-   "npz_bytes": 75952,
+   "npz_bytes": 75879,
    "blocking": []
   },
   "graze_loop": {
@@ -739,11 +739,11 @@
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999988,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 5.0,
-   "hoof_min_z_mm": -2.6161488600462413e-05,
+   "hoof_min_z_mm": -2.6034783440209708e-05,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -751,10 +751,10 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 1.7194201184467847e-08,
+   "slip_max_mm": 1.7146814641408468e-08,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 10.308054650725929,
-   "distal_min_z_mm": 34.1063351045955,
+   "distal_min_z_mm": 34.10873524604714,
    "lowest_point": {
     "bone": "head",
     "frame": 21,
@@ -792,9 +792,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 15.6,
+   "gen_time_s": 7.9,
    "npz": "Pipeline/build/clips/graze_loop.npz",
-   "npz_bytes": 353191,
+   "npz_bytes": 353183,
    "blocking": []
   },
   "graze_up": {
@@ -808,7 +808,7 @@
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.2,
-   "hoof_min_z_mm": -1.3445282345814213e-05,
+   "hoof_min_z_mm": -1.3491501936468975e-05,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -819,7 +819,7 @@
    "slip_max_mm": 3.3691164607874213e-08,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 15.015409709159599,
-   "distal_min_z_mm": 34.11504829461846,
+   "distal_min_z_mm": 34.11816431085216,
    "lowest_point": {
     "bone": "head",
     "frame": 0,
@@ -847,9 +847,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 6.2,
+   "gen_time_s": 2.5,
    "npz": "Pipeline/build/clips/graze_up.npz",
-   "npz_bytes": 62105,
+   "npz_bytes": 62039,
    "blocking": []
   },
   "head_shake": {
@@ -858,12 +858,12 @@
    "duration": 1.2,
    "loop": false,
    "rot_orthonormal_err": 2.220446049250313e-15,
-   "rot_det_min": 0.9999999999999991,
-   "quat_norm_err": 2.220446049250313e-16,
+   "rot_det_min": 0.9999999999999989,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.2,
-   "hoof_min_z_mm": -4.2079448953069587e-07,
+   "hoof_min_z_mm": -4.2344482781286885e-07,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -871,12 +871,12 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 2.288783399261119e-13,
+   "slip_max_mm": 3.3422138886441676e-13,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 258.7709377239896,
-   "distal_min_z_mm": 36.180997014049034,
+   "distal_min_z_mm": 36.181034218327845,
    "lowest_point": {
-    "bone": "front_pastern_l",
+    "bone": "front_pastern_r",
     "frame": 0,
     "z_mm": 36.2
    },
@@ -902,9 +902,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 1.0,
+   "gen_time_s": 0.4,
    "npz": "Pipeline/build/clips/head_shake.npz",
-   "npz_bytes": 45468,
+   "npz_bytes": 45510,
    "blocking": []
   },
   "neigh": {
@@ -918,7 +918,7 @@
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 2.2,
-   "hoof_min_z_mm": -4.2079448953069587e-07,
+   "hoof_min_z_mm": -4.2344482781286885e-07,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -926,12 +926,12 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 2.288783399261119e-13,
+   "slip_max_mm": 3.3422138886441676e-13,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 258.7709377239896,
-   "distal_min_z_mm": 36.180997014049034,
+   "distal_min_z_mm": 36.181034218327845,
    "lowest_point": {
-    "bone": "front_pastern_l",
+    "bone": "front_pastern_r",
     "frame": 0,
     "z_mm": 36.2
    },
@@ -970,9 +970,9 @@
     ]
    },
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 1.5,
+   "gen_time_s": 0.6,
    "npz": "Pipeline/build/clips/neigh.npz",
-   "npz_bytes": 52749,
+   "npz_bytes": 52568,
    "blocking": []
   },
   "paw": {
@@ -982,7 +982,7 @@
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999989,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 3.3306690738754696e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.6,
@@ -997,7 +997,7 @@
    "slip_max_mm": 1.0298555066846463e-08,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 241.8544662613233,
-   "distal_min_z_mm": 35.96994944318345,
+   "distal_min_z_mm": 35.9692274457883,
    "lowest_point": {
     "bone": "front_pastern_l",
     "frame": 0,
@@ -1027,17 +1027,17 @@
     "pos_mm": 41.67
    },
    "loop_other_step_max": {
-    "rot_deg": 15.802,
-    "pos_mm": 65.42
+    "rot_deg": 15.761,
+    "pos_mm": 65.41
    },
-   "loop_seam_acc_mm": 20.69,
+   "loop_seam_acc_mm": 20.7,
    "loop_acc_max_other_mm": 32.13,
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 18.8,
+   "gen_time_s": 7.6,
    "npz": "Pipeline/build/clips/paw.npz",
-   "npz_bytes": 92909,
+   "npz_bytes": 92862,
    "blocking": []
   },
   "rear": {
@@ -1047,7 +1047,7 @@
    "loop": false,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999989,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 2.6,
@@ -1059,10 +1059,10 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 2.9469794317591375e-06,
+   "slip_max_mm": 2.8020561769943274e-06,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 39.05547840790754,
-   "distal_min_z_mm": 35.61659512621941,
+   "distal_min_z_mm": 35.61689459150291,
    "lowest_point": {
     "bone": "front_pastern_r",
     "frame": 15,
@@ -1071,7 +1071,7 @@
    "fetlock_hyper_max_deg": {
     "front_l": 39.9,
     "hind_l": 38.6,
-    "front_r": 47.4,
+    "front_r": 41.4,
     "hind_r": 38.6
    },
    "carpus_flex_max_deg": {
@@ -1090,9 +1090,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 22.3,
+   "gen_time_s": 6.5,
    "npz": "Pipeline/build/clips/rear.npz",
-   "npz_bytes": 162087,
+   "npz_bytes": 160644,
    "blocking": []
   },
   "lie_down": {
@@ -1102,25 +1102,25 @@
    "loop": false,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999988,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 3.3306690738754696e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 3.0,
-   "hoof_min_z_mm": -0.0004906624390538239,
+   "hoof_min_z_mm": -0.0004910148657250035,
    "slip_mm_per_frame": {
     "fl": 0.001,
     "fr": 0.238,
-    "hl": 0.0,
-    "hr": 0.079
+    "hl": 0.002,
+    "hr": 0.061
    },
    "stance_toe_z_max_mm": 0.19,
-   "slip_max_mm": 0.23762873494181724,
-   "hoof_gap_min_m": 0.2396,
-   "body_min_z_mm": 2.0002410350618005,
-   "distal_min_z_mm": 1.9999999999997866,
+   "slip_max_mm": 0.23777265228814898,
+   "hoof_gap_min_m": 0.2173,
+   "body_min_z_mm": 19.986903836423377,
+   "distal_min_z_mm": 1.9999999999999185,
    "lowest_point": {
     "bone": "front_pastern_l",
-    "frame": 75,
+    "frame": 90,
     "z_mm": 2.0
    },
    "fetlock_hyper_max_deg": {
@@ -1145,9 +1145,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 73.8,
+   "gen_time_s": 46.1,
    "npz": "Pipeline/build/clips/lie_down.npz",
-   "npz_bytes": 182561,
+   "npz_bytes": 185411,
    "blocking": []
   },
   "lying": {
@@ -1161,7 +1161,7 @@
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 6.0,
-   "hoof_min_z_mm": 1.9999999999998075,
+   "hoof_min_z_mm": 3.2200181133733574,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -1171,11 +1171,11 @@
    "stance_toe_z_max_mm": 0.0,
    "slip_max_mm": 0.0,
    "hoof_gap_min_m": 9.9,
-   "body_min_z_mm": 22.512176748230758,
-   "distal_min_z_mm": 1.9999999999997935,
+   "body_min_z_mm": 22.461783151113497,
+   "distal_min_z_mm": 1.9999999999999463,
    "lowest_point": {
     "bone": "front_pastern_l",
-    "frame": 66,
+    "frame": 41,
     "z_mm": 2.0
    },
    "fetlock_hyper_max_deg": {
@@ -1199,20 +1199,20 @@
    "limit_violations": [],
    "loop_seam_step": {
     "rot_deg": 0.433,
-    "pos_mm": 1.33
+    "pos_mm": 1.34
    },
    "loop_other_step_max": {
-    "rot_deg": 3.373,
-    "pos_mm": 10.35
+    "rot_deg": 3.375,
+    "pos_mm": 10.46
    },
    "loop_seam_acc_mm": 0.17,
-   "loop_acc_max_other_mm": 1.8,
+   "loop_acc_max_other_mm": 1.82,
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 1.4,
+   "gen_time_s": 0.6,
    "npz": "Pipeline/build/clips/lying.npz",
-   "npz_bytes": 157844,
+   "npz_bytes": 157410,
    "blocking": []
   },
   "get_up": {
@@ -1222,11 +1222,11 @@
    "loop": false,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999989,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 2.5,
-   "hoof_min_z_mm": -0.00016688440289402973,
+   "hoof_min_z_mm": -0.00016688440711287722,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -1234,20 +1234,20 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 1.1522352730722986e-06,
-   "hoof_gap_min_m": 0.253,
-   "body_min_z_mm": 21.788836841055417,
-   "distal_min_z_mm": -0.9464328007569647,
+   "slip_max_mm": 1.1522327698596293e-06,
+   "hoof_gap_min_m": 0.2499,
+   "body_min_z_mm": 21.686181924686583,
+   "distal_min_z_mm": 2.0000000000000155,
    "lowest_point": {
-    "bone": "hind_pastern_r",
-    "frame": 20,
-    "z_mm": -0.9
+    "bone": "hind_pastern_l",
+    "frame": 14,
+    "z_mm": 2.0
    },
    "fetlock_hyper_max_deg": {
-    "front_l": 59.8,
-    "hind_l": 59.8,
-    "front_r": 59.8,
-    "hind_r": 51.5
+    "front_l": 52.3,
+    "hind_l": 58.0,
+    "front_r": 39.9,
+    "hind_r": 43.4
    },
    "carpus_flex_max_deg": {
     "l": 150.0,
@@ -1265,9 +1265,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 56.7,
+   "gen_time_s": 12.3,
    "npz": "Pipeline/build/clips/get_up.npz",
-   "npz_bytes": 158621,
+   "npz_bytes": 159343,
    "blocking": []
   },
   "roll": {
@@ -1277,11 +1277,11 @@
    "loop": false,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.9999999999999989,
-   "quat_norm_err": 3.3306690738754696e-16,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 4.5,
-   "hoof_min_z_mm": 1.999999999999974,
+   "hoof_min_z_mm": 20.44361212179776,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -1291,11 +1291,11 @@
    "stance_toe_z_max_mm": 0.0,
    "slip_max_mm": 0.0,
    "hoof_gap_min_m": 9.9,
-   "body_min_z_mm": 1.9999999999998976,
-   "distal_min_z_mm": 1.9999999999998421,
+   "body_min_z_mm": 1.999999999999974,
+   "distal_min_z_mm": 1.999999999999981,
    "lowest_point": {
-    "bone": "front_pastern_l",
-    "frame": 126,
+    "bone": "hips",
+    "frame": 78,
     "z_mm": 2.0
    },
    "fetlock_hyper_max_deg": {
@@ -1320,9 +1320,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 0.8,
+   "gen_time_s": 0.4,
    "npz": "Pipeline/build/clips/roll.npz",
-   "npz_bytes": 167451,
+   "npz_bytes": 163133,
    "blocking": []
   },
   "body_shake": {
@@ -1332,11 +1332,11 @@
    "loop": false,
    "rot_orthonormal_err": 1.9984014443252818e-15,
    "rot_det_min": 0.999999999999999,
-   "quat_norm_err": 2.220446049250313e-16,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 1.5,
-   "hoof_min_z_mm": -5.935641049503726e-05,
+   "hoof_min_z_mm": -5.9491512841014504e-05,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -1344,10 +1344,10 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 1.7789806413757874e-06,
+   "slip_max_mm": 1.8118678881672697e-06,
    "hoof_gap_min_m": 0.254,
    "body_min_z_mm": 235.6558288068854,
-   "distal_min_z_mm": 35.849556348485564,
+   "distal_min_z_mm": 35.84357519280963,
    "lowest_point": {
     "bone": "front_pastern_l",
     "frame": 13,
@@ -1375,9 +1375,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 13.4,
+   "gen_time_s": 5.2,
    "npz": "Pipeline/build/clips/body_shake.npz",
-   "npz_bytes": 112520,
+   "npz_bytes": 111951,
    "blocking": []
   },
   "jump_takeoff": {
@@ -1386,12 +1386,12 @@
    "duration": 0.5,
    "loop": false,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.999999999999999,
+   "rot_det_min": 0.9999999999999989,
    "quat_norm_err": 2.220446049250313e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 0.5,
-   "hoof_min_z_mm": -1.6069142093344535e-05,
+   "hoof_min_z_mm": -1.5986268156464867e-05,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.009,
@@ -1399,17 +1399,17 @@
     "hr": 0.195
    },
    "stance_toe_z_max_mm": 0.05,
-   "slip_max_mm": 0.1949304620743765,
+   "slip_max_mm": 0.1949304620667792,
    "hoof_gap_min_m": 0.2543,
    "body_min_z_mm": 224.8931958664432,
-   "distal_min_z_mm": 1.2370606042770225,
+   "distal_min_z_mm": 32.755084987966626,
    "lowest_point": {
-    "bone": "hind_pastern_r",
-    "frame": 4,
-    "z_mm": 1.2
+    "bone": "front_pastern_l",
+    "frame": 2,
+    "z_mm": 32.8
    },
    "fetlock_hyper_max_deg": {
-    "front_l": 59.8,
+    "front_l": 39.6,
     "hind_l": 30.6,
     "front_r": 39.8,
     "hind_r": 30.6
@@ -1419,8 +1419,8 @@
     "r": 138.0
    },
    "recip_dev_max_deg": {
-    "l": 12.0,
-    "r": 12.0
+    "l": 2.7,
+    "r": 4.35
    },
    "ao_flex_range_deg": [
     -4.0,
@@ -1430,9 +1430,9 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 9.1,
+   "gen_time_s": 3.1,
    "npz": "Pipeline/build/clips/jump_takeoff.npz",
-   "npz_bytes": 33624,
+   "npz_bytes": 33612,
    "blocking": []
   },
   "jump_air": {
@@ -1441,12 +1441,12 @@
    "duration": 0.4,
    "loop": true,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.9999999999999992,
+   "rot_det_min": 0.9999999999999991,
    "quat_norm_err": 2.220446049250313e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 0.4,
-   "hoof_min_z_mm": 516.8294350055851,
+   "hoof_min_z_mm": 517.2373104702478,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -1457,7 +1457,7 @@
    "slip_max_mm": 0.0,
    "hoof_gap_min_m": 9.9,
    "body_min_z_mm": 269.3878646016252,
-   "distal_min_z_mm": 522.5287633641888,
+   "distal_min_z_mm": 522.8240973805374,
    "lowest_point": {
     "bone": "tail_10",
     "frame": 0,
@@ -1497,7 +1497,7 @@
    "ik_err_max_mm": 0.0,
    "gen_time_s": 0.0,
    "npz": "Pipeline/build/clips/jump_air.npz",
-   "npz_bytes": 18653,
+   "npz_bytes": 18544,
    "blocking": []
   },
   "jump_land": {
@@ -1506,12 +1506,12 @@
    "duration": 0.6,
    "loop": false,
    "rot_orthonormal_err": 1.9984014443252818e-15,
-   "rot_det_min": 0.9999999999999989,
-   "quat_norm_err": 2.220446049250313e-16,
+   "rot_det_min": 0.999999999999999,
+   "quat_norm_err": 4.440892098500626e-16,
    "root_identity_err": 0.0,
    "duration_ok": true,
    "duration_target": 0.6,
-   "hoof_min_z_mm": -0.00013381825414437998,
+   "hoof_min_z_mm": -0.000133023214339556,
    "slip_mm_per_frame": {
     "fl": 0.0,
     "fr": 0.0,
@@ -1519,10 +1519,10 @@
     "hr": 0.0
    },
    "stance_toe_z_max_mm": 0.0,
-   "slip_max_mm": 0.00010062689432378786,
+   "slip_max_mm": 0.00010267269577554679,
    "hoof_gap_min_m": 0.2634,
    "body_min_z_mm": 214.50791012307323,
-   "distal_min_z_mm": 33.22360849919323,
+   "distal_min_z_mm": 33.22707842792393,
    "lowest_point": {
     "bone": "front_pastern_l",
     "frame": 3,
@@ -1532,7 +1532,7 @@
     "front_l": 45.4,
     "hind_l": 40.1,
     "front_r": 46.7,
-    "hind_r": 59.8
+    "hind_r": 33.8
    },
    "carpus_flex_max_deg": {
     "l": 68.4,
@@ -1550,16 +1550,16 @@
    "warnings": [],
    "weights": {},
    "ik_err_max_mm": 0.0,
-   "gen_time_s": 10.9,
+   "gen_time_s": 5.2,
    "npz": "Pipeline/build/clips/jump_land.npz",
-   "npz_bytes": 44554,
+   "npz_bytes": 44511,
    "blocking": []
   }
  },
  "chains": {
   "idle->graze_down": {
    "rot_deg_max": 4.0,
-   "rot_joint": "eye_r",
+   "rot_joint": "eyelid_upper_l",
    "pos_mm_max": 31.3,
    "pos_joint": "lip_upper"
   },
@@ -1567,23 +1567,23 @@
    "rot_deg_max": 0.0,
    "rot_joint": "tail_08",
    "pos_mm_max": 0.0,
-   "pos_joint": "forearm_r"
+   "pos_joint": "forearm_l"
   },
   "graze_loop->graze_up": {
    "rot_deg_max": 0.0,
    "rot_joint": "tail_08",
    "pos_mm_max": 0.0,
-   "pos_joint": "forearm_r"
+   "pos_joint": "forearm_l"
   },
   "graze_up->idle": {
    "rot_deg_max": 4.0,
-   "rot_joint": "eye_r",
+   "rot_joint": "eyelid_upper_l",
    "pos_mm_max": 31.3,
    "pos_joint": "lip_upper"
   },
   "idle->lie_down": {
    "rot_deg_max": 4.0,
-   "rot_joint": "eye_r",
+   "rot_joint": "eyelid_upper_l",
    "pos_mm_max": 31.3,
    "pos_joint": "lip_upper"
   },
@@ -1594,28 +1594,28 @@
    "pos_joint": "tail_10"
   },
   "lying->get_up": {
-   "rot_deg_max": 1.94,
-   "rot_joint": "tail_05",
-   "pos_mm_max": 3.4,
-   "pos_joint": "tail_10"
+   "rot_deg_max": 2.58,
+   "rot_joint": "tail_06",
+   "pos_mm_max": 5.5,
+   "pos_joint": "tail_06"
   },
   "get_up->idle": {
    "rot_deg_max": 4.0,
-   "rot_joint": "eye_r",
+   "rot_joint": "eyelid_upper_l",
    "pos_mm_max": 31.3,
    "pos_joint": "lip_upper"
   },
   "lying->roll": {
-   "rot_deg_max": 0.0,
-   "rot_joint": "tail_03",
-   "pos_mm_max": 0.0,
-   "pos_joint": "root"
+   "rot_deg_max": 15.91,
+   "rot_joint": "tail_06",
+   "pos_mm_max": 26.4,
+   "pos_joint": "body"
   },
   "roll->lying": {
-   "rot_deg_max": 0.0,
-   "rot_joint": "tail_03",
-   "pos_mm_max": 0.0,
-   "pos_joint": "lip_lower"
+   "rot_deg_max": 8.75,
+   "rot_joint": "tail_06",
+   "pos_mm_max": 14.8,
+   "pos_joint": "front_cannon_l"
   },
   "idle->rear": {
    "rot_deg_max": 6.25,
@@ -1631,26 +1631,26 @@
   },
   "idle->body_shake": {
    "rot_deg_max": 4.0,
-   "rot_joint": "eye_r",
+   "rot_joint": "eyelid_upper_l",
    "pos_mm_max": 31.3,
    "pos_joint": "lip_upper"
   },
   "body_shake->idle": {
    "rot_deg_max": 4.0,
-   "rot_joint": "eye_r",
+   "rot_joint": "eyelid_upper_l",
    "pos_mm_max": 31.3,
    "pos_joint": "lip_upper"
   },
   "idle->paw": {
-   "rot_deg_max": 22.6,
+   "rot_deg_max": 22.61,
    "rot_joint": "front_pastern_r",
-   "pos_mm_max": 123.2,
+   "pos_mm_max": 122.8,
    "pos_joint": "ear_tip_l"
   },
   "paw->idle": {
-   "rot_deg_max": 22.6,
+   "rot_deg_max": 22.61,
    "rot_joint": "front_pastern_r",
-   "pos_mm_max": 123.2,
+   "pos_mm_max": 122.8,
    "pos_joint": "ear_tip_l"
   },
   "jump_takeoff->jump_air": {
@@ -1660,19 +1660,19 @@
    "pos_joint": "lip_upper"
   },
   "jump_air->jump_land": {
-   "rot_deg_max": 133.05,
+   "rot_deg_max": 133.06,
    "rot_joint": "front_hoof_l",
-   "pos_mm_max": 529.9,
+   "pos_mm_max": 530.2,
    "pos_joint": "front_hoof_r"
   },
   "jump_land->canter_left": {
-   "rot_deg_max": 75.48,
+   "rot_deg_max": 75.47,
    "rot_joint": "front_pastern_r",
    "pos_mm_max": 635.1,
    "pos_joint": "front_hoof_r"
   },
   "canter_left->jump_takeoff": {
-   "rot_deg_max": 66.46,
+   "rot_deg_max": 66.42,
    "rot_joint": "front_hoof_l",
    "pos_mm_max": 418.9,
    "pos_joint": "hind_hoof_r"
@@ -1689,14 +1689,14 @@
   "wh_estimate_m": 1.3001
  },
  "missing": [],
- "generated_at": "2026-10-05 21:51:55",
+ "generated_at": "2026-10-05 22:22:51",
  "jump_sequence": {
   "sequence_sole_min_frame": 49,
   "sequence_sole_min_label": "jump_land 0.07s",
   "obstacle_m": 0.7,
   "entity_apex_m": 0.4,
   "flight_s": 0.571,
-  "clearance_mm": 180.0,
+  "clearance_mm": 180.3,
   "clearance_frame": 34,
   "clearance_part": "front_pastern_l",
   "sequence_sole_min_z_mm": -14.4,

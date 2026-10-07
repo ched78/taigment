@@ -26,7 +26,7 @@ Paramètres morphologiques (`BodyParams`, valeurs par défaut = poney de base We
 | muscle         | 0 … 1              | relief musculaire (masses plus volumineuses, sillons inter-musculaires plus marqués) |
 | belly          | 0 … 1              | gros ventre (abaissement + élargissement de la ligne du dessous) |
 | crest          | 0 … 1              | encolure rouée / crête épaisse |
-| bone           | 0 … 1              | canons, genoux, jarrets, boulets plus épais |
+| bone           | −1 … +1            | canons, genoux, jarrets, boulets plus épais (+) / plus fins (−) |
 | head_profile   | −1 … +1            | −1 chanfrein concave (« dished »), +1 busqué (« roman ») |
 | head_short     | 0 … 1              | face raccourcie (≈ −12 % au-delà des yeux), museau affiné |
 | muzzle_width   | 0 … 1              | museau élargi, naseaux plus ouverts |
@@ -39,6 +39,8 @@ Paramètres morphologiques (`BodyParams`, valeurs par défaut = poney de base We
 | micro_detail   | 0 … 1              | veines, plis et rides fines (réservé à la haute définition cuite ; 0 pour la basse déf.) |
 | features       | bool               | True = fentes/cavités ouvertes (bouche, yeux, naseaux, conque des oreilles) ; False = variante « fermée » pour la retopologie |
 
+Correspondance blend shapes (SPEC §5) -> paramètres : `BLEND_SHAPE_PARAMS`, `params_for_shape(nom)`.
+
 Toutes les valeurs anatomiques sont des approximations artistiques [A] calées sur les cibles chiffrées
 de Docs/research/anatomy.md (§1.3, §1.4, §3.3) ; les positions viennent du gabarit (template.py).
 """
@@ -50,7 +52,7 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from . import template
-from .body_sdf_lib import (BIG, F32, BlobBump, Bump, PolyBump, Ellipsoid, Func, Group, Hoof, Loft, RoundBox, RoundCone,
+from .body_sdf_lib import (BIG, F32, VarK, BlobBump, Bump, PolyBump, Ellipsoid, Func, Group, Hoof, Loft, RoundBox, RoundCone,
                            Segment, Sphere, VLoft, evaluate, frame_from_axis, gradient, project, ray_surface, smax,
                            smin, smoothstep, unit)
 
@@ -86,12 +88,34 @@ class BodyParams:
 PARAM_DOC = {
     "trunk_width": ("facteur", (0.85, 1.20)), "trunk_depth": ("facteur", (0.90, 1.12)),
     "fat": ("-1..1", (-1.0, 1.0)), "muscle": ("0..1", (0.0, 1.0)), "belly": ("0..1", (0.0, 1.0)),
-    "crest": ("0..1", (0.0, 1.0)), "bone": ("0..1", (0.0, 1.0)), "head_profile": ("-1..1", (-1.0, 1.0)),
+    "crest": ("0..1", (0.0, 1.0)), "bone": ("-1..1", (-1.0, 1.0)), "head_profile": ("-1..1", (-1.0, 1.0)),
     "head_short": ("0..1", (0.0, 1.0)), "muzzle_width": ("0..1", (0.0, 1.0)),
     "hoof_size": ("facteur", (0.85, 1.25)), "nostril_flare": ("0..1", (0.0, 1.0)),
     "flehmen": ("0..1", (0.0, 1.0)), "brow_worry": ("0..1", (0.0, 1.0)), "mouth_soft": ("0..1", (0.0, 1.0)),
     "breathe": ("0..1", (0.0, 1.0)), "micro_detail": ("0..1", (0.0, 1.0)), "features": ("bool", (0, 1)),
 }
+
+# Blend shapes du corps (SPEC §5) -> paramètres SDF à poids 1 [A]. Construction prévue : évaluer la SDF avec ces
+# paramètres, projeter chaque sommet de `Body` (le long de sa normale) sur la nouvelle iso-surface, stocker le delta.
+# Les formes d'expression ne modifient que la tête ; `body_breathe` seulement le thorax / flanc.
+BLEND_SHAPE_PARAMS = {
+    "shape_stocky": dict(trunk_width=1.12, trunk_depth=1.06, bone=0.6, crest=0.3, muzzle_width=0.3, hoof_size=1.08,
+                         head_short=0.3),
+    "shape_refined": dict(trunk_width=0.90, trunk_depth=0.95, bone=-0.6, head_profile=-0.3),
+    "shape_fat": dict(fat=1.0), "shape_thin": dict(fat=-1.0),
+    "shape_muscular": dict(muscle=1.0), "shape_belly": dict(belly=1.0), "shape_crest": dict(crest=1.0),
+    "shape_bone_heavy": dict(bone=1.0),
+    "head_dished": dict(head_profile=-1.0), "head_roman": dict(head_profile=1.0), "head_short": dict(head_short=1.0),
+    "muzzle_broad": dict(muzzle_width=1.0), "hooves_large": dict(hoof_size=1.20),
+    "face_nostril_flare": dict(nostril_flare=1.0), "face_flehmen": dict(flehmen=1.0),
+    "face_brow_worry": dict(brow_worry=1.0), "face_mouth_open_soft": dict(mouth_soft=1.0),
+    "body_breathe": dict(breathe=1.0),
+}
+
+
+def params_for_shape(name: str, features: bool = True) -> "BodyParams":
+    """BodyParams de la forme `name` (SPEC §5) à poids 1 ; KeyError si le nom est inconnu."""
+    return BodyParams(features=features, **BLEND_SHAPE_PARAMS[name])
 
 
 # ==============================================================================================
@@ -295,6 +319,36 @@ class NostrilFeature:
     a2: float
     ring_c: list          # centres des anneaux du conduit (de l'ouverture vers le fond)
     ring_s: list          # facteurs d'échelle des anneaux
+    notch: float = 0.42   # profondeur relative de l'échancrure du pli alaire (ouverture en « C »)
+
+    def notch_dir(self):
+        """Direction (dans le plan de l'ouverture) du pli alaire : bord caudal (vers l'œil), un peu dorsal."""
+        d = -self.e2 + 0.25 * self.e1
+        d = d - np.dot(d, self.n_out) * self.n_out
+        return d / np.linalg.norm(d)
+
+    def notch_tan(self):
+        t = np.cross(self.n_out, self.notch_dir())
+        return t / np.linalg.norm(t)
+
+    def notch_depth_center(self):
+        return 1.02 * self.a2
+
+    def outline_factor(self, phi):
+        """Facteur radial (≤ 1) du contour en « C » à l'angle φ de l'ellipse (a1 cos φ e1 + a2 sin φ e2)."""
+        nd = self.notch_dir()
+        phin = math.atan2(float(nd @ self.e2) / self.a2, float(nd @ self.e1) / self.a1)
+        dphi = np.angle(np.exp(1j * (np.asarray(phi, float) - phin)))
+        return 1.0 - self.notch * np.exp(-(dphi / 0.50) ** 2)
+
+    def outline(self, phi, scale=1.0, center=None, e1=None, e2=None):
+        """Points du contour en « C » (rayon modulé), dans le plan (e1, e2) passant par `center`."""
+        phi = np.asarray(phi, float)
+        c = self.Nc if center is None else center
+        e1 = self.e1 if e1 is None else e1
+        e2 = self.e2 if e2 is None else e2
+        f = self.outline_factor(phi) * scale
+        return c + (self.a1 * np.cos(phi) * f)[:, None] * e1 + (self.a2 * np.sin(phi) * f)[:, None] * e2
 
 
 @dataclass
@@ -394,6 +448,12 @@ class _Builder:
         H0, a0, d0 = self.head_frame()
         return self.M.v("head", s * a0 + d * d0 + np.array([x, 0.0, 0.0]))
 
+    def vk_height(self, z_lo, z_hi, k_lo, k_hi):
+        """Largeur de raccord variable avec la hauteur (gabarit de référence) : k_lo sous z_lo, k_hi au-dessus
+        de z_hi (transition lisse)."""
+        zl, zh, kl, kh = z_lo * self.k, z_hi * self.k, self.r(k_lo), self.r(k_hi)
+        return VarK(lambda P: kl + (kh - kl) * smoothstep(zl, zh, P[:, 2]), max(kl, kh))
+
     # ------------------------------------------------------------------ assemblage
     def build(self):
         p = self.p
@@ -403,7 +463,15 @@ class _Builder:
         head = self.head()
         tail = self.tail()
         root.add("U", trunk, 0.0)
-        root.add("U", neck, 0.17)
+        O_n, ax_n, nm_n = self.neck_frame
+        kmx = self.r(0.12)
+
+        def k_neck(P, O=O_n.astype(F32), nm=nm_n.astype(F32), kmx=kmx, kmn=self.r(0.065)):
+            # grand raccord sous l'encolure (poitrail, gorge), serré sur la crête / le garrot (pas de bosse)
+            v = (P - O) @ nm
+            return kmn + (kmx - kmn) * smoothstep(0.10 * self.k, -0.06 * self.k, v)
+
+        root.add("U", neck, VarK(k_neck, kmx))
         root.add("U", head, 0.045)
         root.add("U", tail, 0.035)
         self.regions.update(trunk=trunk, neck=neck, head=head, tail=tail)
@@ -419,10 +487,16 @@ class _Builder:
             ear = self.ear(side, sx)
             root.add("U", ear, 0.012)
         for sg in self.shoulders:
-            root.add("U", sg, 0.075)
+            # raccord large sur les flancs, serré sur la ligne du dessus (évite la bosse d'union lisse)
+            if sg.name.startswith("croup"):
+                root.add("U", sg, self.vk_height(1.10, 1.24, 0.15, 0.05))
+            else:
+                root.add("U", sg, self.vk_height(1.05, 1.22, 0.09, 0.05))
         # reliefs, sillons, creux (après les unions) : ancrages recalés sur la surface de base
         base = lambda P, r=root: evaluate(r, np.asarray(P, F32), margin=0.05)
-        for op, prim, k in self.details:
+        import os
+        dbg = os.environ.get("PONY_SDF_DEBUG", "")
+        for op, prim, k in ([] if "nodetail" in dbg else self.details):
             if op == "D":
                 _snap_detail(prim, base)
             root.add(op, prim, k)
@@ -440,22 +514,22 @@ class _Builder:
         # Stations : y, dessus, dessous, demi-largeur, fraction de la largeur max, exposants haut / bas [A]
         S = np.array([
             # y      top    bot     w      wf    nt   nb
-            [0.66, 1.030, 0.880, 0.070, 0.50, 2.0, 2.0],
-            [0.62, 1.120, 0.825, 0.140, 0.46, 1.9, 2.0],
-            [0.54, 1.195, 0.755, 0.182, 0.44, 1.95, 1.95],
-            [0.42, 1.235, 0.715, 0.205, 0.42, 2.1, 1.95],
-            [0.30, 1.248, 0.700, 0.216, 0.42, 2.25, 2.0],
-            [0.15, 1.245, 0.680, 0.236, 0.42, 2.35, 2.1],
-            [0.00, 1.236, 0.664, 0.252, 0.42, 2.4, 2.15],
-            [-0.10, 1.236, 0.655, 0.256, 0.42, 2.4, 2.15],
-            [-0.20, 1.240, 0.664, 0.252, 0.44, 2.5, 2.15],
-            [-0.30, 1.254, 0.700, 0.240, 0.47, 2.6, 2.1],
-            [-0.40, 1.272, 0.770, 0.222, 0.50, 2.5, 2.0],
-            [-0.50, 1.284, 0.850, 0.210, 0.52, 2.3, 2.0],
-            [-0.60, 1.276, 0.910, 0.192, 0.52, 2.2, 2.0],
-            [-0.70, 1.238, 0.960, 0.145, 0.52, 2.0, 2.0],
-            [-0.78, 1.175, 1.000, 0.080, 0.50, 2.0, 2.0],
-            [-0.83, 1.125, 1.040, 0.030, 0.50, 2.0, 2.0],
+            [0.68, 1.000, 0.890, 0.085, 0.50, 2.0, 2.0],
+            [0.64, 1.100, 0.830, 0.160, 0.46, 1.9, 2.0],
+            [0.56, 1.180, 0.758, 0.196, 0.44, 2.0, 2.0],
+            [0.44, 1.228, 0.716, 0.200, 0.42, 2.25, 2.0],
+            [0.30, 1.250, 0.700, 0.200, 0.42, 2.5, 2.05],
+            [0.15, 1.252, 0.674, 0.228, 0.42, 2.7, 2.15],
+            [0.00, 1.250, 0.648, 0.258, 0.42, 2.8, 2.2],
+            [-0.10, 1.252, 0.638, 0.266, 0.42, 2.8, 2.2],
+            [-0.20, 1.258, 0.645, 0.264, 0.44, 2.8, 2.2],
+            [-0.30, 1.270, 0.675, 0.254, 0.47, 2.8, 2.15],
+            [-0.40, 1.285, 0.745, 0.240, 0.50, 2.6, 2.05],
+            [-0.50, 1.292, 0.830, 0.226, 0.52, 2.4, 2.0],
+            [-0.60, 1.280, 0.900, 0.206, 0.52, 2.2, 2.0],
+            [-0.70, 1.240, 0.955, 0.158, 0.52, 2.0, 2.0],
+            [-0.78, 1.175, 1.000, 0.088, 0.50, 2.0, 2.0],
+            [-0.83, 1.125, 1.040, 0.034, 0.50, 2.0, 2.0],
         ], float)
         ys, top, bot, w = S[:, 0].copy(), S[:, 1].copy(), S[:, 2].copy(), S[:, 3].copy()
         # paramètres morphologiques
@@ -477,34 +551,30 @@ class _Builder:
         self.trunk_loft = loft
         # garrot : crête des processus épineux
         wr = 1.0 + 0.25 * max(-fat, 0.0)
-        g.add("U", Ellipsoid(self.tp(0.275, 1.222), self.r(np.array([0.040, 0.175, 0.080]) * [1.0, 1.0, wr])), 0.05)
-        # muscles longs du dos (deux bandes)
-        for sx in (-1.0, 1.0):
-            a = self.tp(0.22, 1.172, 0.058 * tw, sx)
-            b = self.tp(-0.40, 1.196, 0.060 * tw, sx)
-            rr = self.r(0.058 * (1 + 0.08 * mus))
-            g.add("U", Segment(a, b, (rr * 1.05, rr * 1.05), (rr, rr)), 0.05)
+        g.add("U", Ellipsoid(self.tp(0.265, 1.205), self.r(np.array([0.045, 0.170, 0.072]) * [1.0, 1.0, wr])), self.r(0.09))
         # sacrum / sommet de croupe
-        g.add("U", Ellipsoid(self.tp(-0.50, 1.250), self.r([0.055 * tw, 0.20, 0.058])), 0.05)
+        g.add("U", Ellipsoid(self.tp(-0.50, 1.232), self.r([0.075 * tw, 0.21, 0.052])), self.r(0.08))
         # poitrail : masse centrale + pectoraux descendants (V)
-        g.add("U", Ellipsoid(self.tp(0.575, 0.862), self.r([0.118 * tw, 0.066, 0.112])), 0.05)
         for sx, side in ((-1.0, "l"), (1.0, "r")):
+            # pectoral superficiel (masse du poitrail) : deux masses séparées par un sillon médian
+            g.add("U", Ellipsoid(self.tp(0.600, 0.878, 0.060 * tw, sx), self.r([0.068 * tw, 0.068, 0.105]) *
+                                 (1 + 0.06 * mus)), self.r(0.05))
             a = self.M.pw([("spine_03", 0.5), (f"forearm_{side}", 0.5)], (sx * 0.058 * tw, 0.630, 0.905))
             b = self.M.p(f"forearm_{side}", (sx * (0.102 + self.legdx(True, side, 0.69)), 0.495, 0.690))
             rr = 1.0 + 0.08 * mus
             g.add("U", Segment(a, b, (self.r(0.050 * rr), self.r(0.040 * rr)), (self.r(0.046 * rr), self.r(0.040))),
                   0.04)
             # pectoral ascendant (sous le thorax, entre les membres)
-            g.add("U", Ellipsoid(self.tp(0.38, 0.715, 0.075, sx), self.r([0.055, 0.12, 0.035])), 0.05)
+            g.add("U", Ellipsoid(self.tp(0.40, 0.712, 0.065, sx), self.r([0.050, 0.11, 0.030])), self.r(0.07))
         # creux du flanc (fosse paralombaire) et sillon de la sangle
         for sx in (-1.0, 1.0):
             depth = 0.85 + 0.6 * max(-fat, 0.0) - 0.5 * max(fat, 0.0)
             c = self.tp(-0.290, 1.075, 0.235 * tw, sx)
-            self.details.append(("D", BlobBump(c, self.r(np.array([0.040, 0.075, 0.060])), -self.r(0.007 * depth)), 0.0))
+            self.details.append(("D", BlobBump(c, self.r(np.array([0.050, 0.090, 0.070])), -self.r(0.0045 * depth)), 0.0))
             # sillon de la sangle juste derrière le coude
             a = self.tp(0.30, 0.86, 0.19 * tw + 0.006, sx)
             b = self.tp(0.33, 0.70, 0.15 * tw + 0.004, sx)
-            self.details.append(("D", Bump(a, b, self.r(0.030), -self.r(0.0025), taper=0.35), 0.0))
+            self.details.append(("D", Bump(a, b, self.r(0.035), -self.r(0.0015), taper=0.35), 0.0))
             # côtes (visibles si maigre ; très légères sinon)
             amp = 0.0003 + 0.0045 * max(-fat, 0.0)
             for i in range(9):
@@ -515,7 +585,7 @@ class _Builder:
             # oblique externe de l'abdomen : léger pli bas du flanc
             a = self.tp(-0.32, 0.90, 0.215 * tw, sx)
             b = self.tp(0.05, 0.74, 0.225 * tw, sx)
-            self.details.append(("D", Bump(a, b, self.r(0.018), -self.r(0.0015 + 0.002 * mus)), 0.0))
+            self.details.append(("D", Bump(a, b, self.r(0.030), -self.r(0.0010 + 0.002 * mus)), 0.0))
         # ligne du dos (épine dorsale) si maigre
         if fat < 0:
             self.details.append(("D", Bump(self.tp(0.10, 1.25), self.tp(-0.45, 1.265), self.r(0.012),
@@ -572,10 +642,10 @@ class _Builder:
         L0 = np.linalg.norm(M.rh("head") - O_ref)
         s_ref = np.array([0.06, 0.12, 0.18, 0.24, 0.30, 0.36, 0.42, 0.48, 0.53, 0.57, 0.62])
         # demi-largeurs [A] (base fondue dans les épaules → nuque)
-        w_ref = np.array([0.148, 0.160, 0.156, 0.146, 0.134, 0.122, 0.111, 0.102, 0.094, 0.087, 0.075])
-        wf = np.array([0.42, 0.42, 0.42, 0.42, 0.42, 0.43, 0.45, 0.48, 0.52, 0.55, 0.55])
+        w_ref = np.array([0.165, 0.176, 0.172, 0.162, 0.150, 0.138, 0.126, 0.115, 0.104, 0.094, 0.080])
+        wf = np.array([0.40, 0.40, 0.40, 0.40, 0.41, 0.42, 0.44, 0.47, 0.50, 0.53, 0.53])
         nt = np.array([2.10, 2.05, 1.95, 1.85, 1.78, 1.75, 1.75, 1.80, 1.90, 2.0, 2.0])
-        nb = np.array([1.90, 1.90, 1.95, 2.00, 2.00, 2.05, 2.10, 2.10, 2.10, 2.1, 2.1])
+        nb = np.array([2.10, 2.10, 2.15, 2.20, 2.20, 2.20, 2.20, 2.15, 2.10, 2.1, 2.1])
         ss, tops, bots, keep = [], [], [], []
         for i0, s0 in enumerate(s_ref):
             s = s0 * L / L0
@@ -614,11 +684,11 @@ class _Builder:
                     if hit is not None:
                         store.append(hit)
             if len(pts_j) >= 3:
-                self.details.append(("D", PolyBump(np.array(pts_j), self.r(0.017),
-                                                   -self.r(0.0032 + 0.002 * p.muscle), taper=0.2), 0.0))
+                self.details.append(("D", PolyBump(np.array(pts_j), self.r(0.022),
+                                                   -self.r(0.0018 + 0.002 * p.muscle), taper=0.25), 0.0))
             if len(pts_b) >= 3:
-                self.details.append(("D", PolyBump(np.array(pts_b), self.r(0.026),
-                                                   self.r(0.0018 + 0.003 * p.muscle), taper=0.25), 0.0))
+                self.details.append(("D", PolyBump(np.array(pts_b), self.r(0.034),
+                                                   self.r(0.0015 + 0.003 * p.muscle), taper=0.25), 0.0))
             if len(pts_s) >= 3:
                 pts_s = np.array(pts_s)
                 self.details.append(("D", Bump(pts_s[1], pts_s[3], self.r(0.045),
@@ -627,83 +697,87 @@ class _Builder:
 
     # ------------------------------------------------------------------ tête
     def head(self):
+        """Tête type Welsh B / Connemara [A] : front large et plat, chanfrein droit (réglable concave / busqué),
+        face courte effilée vers un petit museau, grandes ganaches rondes, œil saillant sous une arcade marquée.
+
+        Repère : s le long de l'axe nuque → bout du nez (os « head »), d vers le chanfrein, x latéral (m, gabarit
+        de référence ; `hp`/`hv` transportent par l'os). Les abscisses sont FINALES (face non raccourcie pour
+        head_short = 0)."""
         p = self.p
         M = self.M
         g = Group("head")
         H = M.jh("head")
-        H0, a0, d0 = self.head_frame()
-        ax = self.hv(1.0, 0.0)
-        ax = unit(ax)
+        ax = unit(self.hv(1.0, 0.0))
         dn = unit(self.hv(0.0, 1.0))
-        # Profil (s, dessus, dessous, demi-largeur, wf, nt, nb) dans le repère tête [A]
+        # Profil (s, dessus, dessous, demi-largeur, wf, nt, nb) [A]
         T = np.array([
-            [-0.140, -0.075, -0.115, 0.040, 0.50, 2.0, 2.0],
-            [-0.085, 0.004, -0.078, 0.062, 0.55, 2.0, 2.0],
-            [-0.045, 0.046, -0.072, 0.071, 0.58, 2.2, 2.0],
-            [0.000, 0.073, -0.082, 0.078, 0.60, 2.4, 2.1],
-            [0.035, 0.080, -0.105, 0.086, 0.62, 2.4, 2.2],
-            [0.065, 0.085, -0.136, 0.092, 0.64, 2.4, 2.3],
-            [0.100, 0.089, -0.146, 0.096, 0.66, 2.4, 2.3],
-            [0.150, 0.091, -0.142, 0.097, 0.67, 2.4, 2.3],
-            [0.200, 0.089, -0.133, 0.090, 0.64, 2.4, 2.3],
-            [0.250, 0.082, -0.122, 0.078, 0.60, 2.4, 2.3],
-            [0.300, 0.073, -0.110, 0.069, 0.55, 2.4, 2.2],
-            [0.350, 0.065, -0.100, 0.062, 0.52, 2.4, 2.2],
-            [0.400, 0.056, -0.095, 0.057, 0.50, 2.3, 2.2],
-            [0.440, 0.051, -0.095, 0.056, 0.48, 2.2, 2.2],
-            [0.470, 0.042, -0.090, 0.055, 0.46, 2.2, 2.2],
-            [0.492, 0.022, -0.072, 0.046, 0.45, 2.0, 2.0],
-            [0.500, 0.004, -0.050, 0.028, 0.50, 2.0, 2.0],
+            [-0.150, -0.068, -0.122, 0.046, 0.50, 2.0, 2.0],
+            [-0.100, 0.002, -0.104, 0.060, 0.52, 2.0, 2.0],
+            [-0.060, 0.040, -0.094, 0.070, 0.56, 2.1, 2.0],
+            [-0.020, 0.066, -0.100, 0.078, 0.60, 2.3, 2.1],
+            [0.020, 0.081, -0.122, 0.085, 0.62, 2.4, 2.2],
+            [0.060, 0.090, -0.150, 0.090, 0.64, 2.5, 2.3],
+            [0.100, 0.095, -0.160, 0.096, 0.66, 2.5, 2.3],
+            [0.140, 0.097, -0.156, 0.097, 0.68, 2.5, 2.3],
+            [0.180, 0.094, -0.140, 0.089, 0.66, 2.5, 2.3],
+            [0.220, 0.087, -0.127, 0.076, 0.60, 2.4, 2.3],
+            [0.260, 0.079, -0.115, 0.065, 0.55, 2.4, 2.2],
+            [0.300, 0.071, -0.105, 0.058, 0.52, 2.4, 2.2],
+            [0.340, 0.062, -0.096, 0.055, 0.50, 2.3, 2.2],
+            [0.375, 0.054, -0.092, 0.055, 0.48, 2.2, 2.2],
+            [0.405, 0.044, -0.088, 0.054, 0.46, 2.2, 2.2],
+            [0.428, 0.032, -0.080, 0.050, 0.46, 2.1, 2.1],
+            [0.442, 0.012, -0.062, 0.038, 0.48, 2.0, 2.0],
+            [0.448, -0.010, -0.042, 0.020, 0.50, 2.0, 2.0],
         ], float)
         s, top, bot, w = T[:, 0].copy(), T[:, 1].copy(), T[:, 2].copy(), T[:, 3].copy()
-        # profil de chanfrein : concave (dished) / busqué (roman)
         prof = p.head_profile
-        if prof != 0:
-            if prof > 0:
-                top += 0.011 * prof * np.exp(-((s - 0.33) / 0.08) ** 2)
-            else:
-                top += 0.010 * prof * np.exp(-((s - 0.255) / 0.05) ** 2)
-        mz = np.clip((s - 0.36) / 0.06, 0, 1)
-        w = w * (1.0 + 0.12 * p.muzzle_width * mz) * (1.0 - 0.08 * p.head_short * mz)
+        if prof > 0:      # busqué : bosse du chanfrein
+            top += 0.011 * prof * np.exp(-((s - 0.28) / 0.07) ** 2)
+        elif prof < 0:    # concave (« dished ») : creux sous les yeux
+            top += 0.009 * prof * np.exp(-((s - 0.235) / 0.05) ** 2)
+        mz = np.clip((s - 0.30) / 0.08, 0, 1)
+        w = w * (1.0 + 0.10 * p.muzzle_width * mz) * (1.0 - 0.06 * p.head_short * mz)
         s = face_s(s, p.head_short)
         loft = Loft(H, ax, dn, self.r(s), self.r(top), self.r(bot), self.r(w), T[:, 4], T[:, 5], T[:, 6])
         g.add("U", loft)
+        self.head_loft = loft
         hp = self.hp
         X = np.array([1.0, 0.0, 0.0])
         Rh = np.stack([ax, dn, X], 1)  # colonnes : axe, dorsal, latéral
         mus = p.muscle
         for sx in (-1.0, 1.0):
-            # ganaches (masséters) : larges et plates
-            Rm = np.stack([unit(self.hv(1.0, 0.35)), unit(self.hv(-0.35, 1.0)), X], 1)
-            g.add("U", Ellipsoid(hp(0.098, -0.086, sx * 0.066), self.r([0.078 * (1 + 0.04 * mus), 0.078, 0.025]), Rm),
-                  0.018)
-            # angle de la mandibule (contour arrondi de la ganache)
-            g.add("U", Ellipsoid(hp(0.070, -0.120, sx * 0.060), self.r([0.050, 0.046, 0.021]), Rm), 0.016)
-            # bord ventral de la mandibule (rami)
-            a = hp(0.07, -0.140, sx * 0.050)
-            b = hp(0.36, -0.092, sx * 0.034)
-            g.add("U", Segment(a, b, (self.r(0.016), self.r(0.012)), (self.r(0.012), self.r(0.010)), lat=X), 0.02)
-            # arcade sourcilière (processus supra-orbitaire)
-            a = hp(0.118, 0.060, sx * 0.064)
-            b = hp(0.205, 0.050, sx * 0.078)
-            g.add("U", Segment(a, b, (self.r(0.013), self.r(0.010)), (self.r(0.012), self.r(0.009)), lat=dn), 0.03)
-            # crête faciale (zygomatique)
-            self.details.append(("D", Bump(hp(0.175, -0.024, sx * 0.090), hp(0.275, -0.040, sx * 0.074),
-                                           self.r(0.009), self.r(0.0028 + 0.002 * mus), taper=0.35), 0.0))
+            # ganache : masséter + branche verticale de la mandibule (grand disque aplati, bord arrière arrondi)
+            Rm = np.stack([unit(self.hv(1.0, 0.30)), unit(self.hv(-0.30, 1.0)), X], 1)
+            g.add("U", Ellipsoid(hp(0.086, -0.090, sx * 0.064), self.r(np.array([0.078, 0.076, 0.032]) *
+                                                                      [1, 1, 1 + 0.05 * mus]), Rm), 0.024)
+            # bord ventral de la mandibule (branche horizontale) jusqu'au menton
+            a = hp(0.100, -0.146, sx * 0.050)
+            b = hp(0.350, -0.092, sx * 0.030)
+            g.add("U", Segment(a, b, (self.r(0.015), self.r(0.011)), (self.r(0.013), self.r(0.010)), lat=X), 0.022)
+            # arcade sourcilière (processus supra-orbitaire) : arc au-dessus de l'œil
+            g.add("U", Segment(hp(0.195, 0.054, sx * 0.070), hp(0.105, 0.058, sx * 0.080),
+                               (self.r(0.012), self.r(0.014)), (self.r(0.011), self.r(0.012)), lat=dn), 0.03)
+            # crête faciale (zygomatique) : sous l'œil vers l'avant
+            self.details.append(("D", Bump(hp(0.150, -0.020, sx * 0.092), hp(0.255, -0.038, sx * 0.072),
+                                           self.r(0.010), self.r(0.0025 + 0.002 * mus), taper=0.35), 0.0))
             # salière (fosse supra-orbitaire)
-            self.details.append(("D", BlobBump(hp(0.098, 0.050, sx * 0.084), self.r(np.array([0.030, 0.018, 0.014])),
-                                               -self.r(0.0030 + 0.004 * max(-p.fat, 0)), Rh), 0.0))
-            # sillon entre masséter et joue (bord rostral du masséter)
-            self.details.append(("D", Bump(hp(0.172, -0.042, sx * 0.088), hp(0.198, -0.128, sx * 0.074),
-                                           self.r(0.009), -self.r(0.0035), taper=0.3), 0.0))
+            self.details.append(("D", BlobBump(hp(0.080, 0.060, sx * 0.080), self.r(np.array([0.026, 0.016, 0.014])),
+                                               -self.r(0.0025 + 0.004 * max(-p.fat, 0)), Rh), 0.0))
+            # bord rostral du masséter : sillon doux
+            self.details.append(("D", Bump(hp(0.160, -0.040, sx * 0.088), hp(0.175, -0.125, sx * 0.074),
+                                           self.r(0.012), -self.r(0.0022), taper=0.35), 0.0))
+            # creux sous-orbitaire (devant / sous l'œil, au-dessus de la crête faciale)
+            self.details.append(("D", BlobBump(hp(0.215, 0.010, sx * 0.074), self.r(np.array([0.030, 0.018, 0.012])),
+                                               -self.r(0.0020), Rh), 0.0))
         # auge (espace intermandibulaire)
-        self.details.append(("S", Segment(hp(0.080, -0.172), hp(0.330, -0.118),
-                                          (self.r(0.030), self.r(0.017)), (self.r(0.020), self.r(0.016)), lat=X),
+        self.details.append(("S", Segment(hp(0.060, -0.182), hp(0.320, -0.112),
+                                          (self.r(0.030), self.r(0.018)), (self.r(0.016), self.r(0.012)), lat=X),
                              0.02))
         # lèvres et menton
         self.mouth_parts(g)
-        # nuque / toupet : légère crête nucale
-        g.add("U", Ellipsoid(hp(-0.025, 0.040), self.r([0.032, 0.026, 0.055]), Rh), 0.035)
+        # nuque : légère crête nucale (attache du ligament nuchal), front plat
+        g.add("U", Ellipsoid(hp(-0.030, 0.042), self.r([0.030, 0.024, 0.052]), Rh), 0.035)
         # yeux, naseaux (et ouvertures)
         for side, sx in (("l", -1.0), ("r", 1.0)):
             self.eye(g, side, sx)
@@ -719,35 +793,40 @@ class _Builder:
         dn = unit(self.hv(0.0, 1.0))
         Rh = np.stack([ax, dn, X], 1)
         fl = p.flehmen
-        # lèvre supérieure (mobile, épaisse) — flehmen : rotation vers le haut autour d'un axe latéral
-        c_up = hp(0.468, -0.018)
+        # lèvre supérieure (mobile, épaisse) — flehmen : rotation vers le haut autour d'un axe latéral [A]
+        c_up = hp(0.421, -0.029)
         if fl > 0:
-            piv = hp(0.420, 0.030)
+            piv = hp(0.385, 0.020)
             ang = math.radians(38.0 * fl)
             Rx = _axis_rot(X, ang)
             c_up = piv + Rx @ (c_up - piv)
             Rh_up = Rx @ Rh
         else:
             Rh_up = Rh
-        g.add("U", Ellipsoid(c_up, self.r([0.034, 0.030, 0.048]), Rh_up), 0.022)
-        # lèvre inférieure + menton (attachés à la mâchoire)
+        g.add("U", Ellipsoid(c_up, self.r([0.032, 0.029, 0.044]), Rh_up), 0.020)
+        # lèvre inférieure + menton (suivent la mâchoire)
         ms = p.mouth_soft
-        c_lo = hp(0.462 + 0.004 * ms, -0.062 - 0.008 * ms)
-        g.add("U", Ellipsoid(c_lo, self.r([0.030, 0.022 + 0.003 * ms, 0.038]), Rh), 0.018)
-        g.add("U", Ellipsoid(hp(0.423, -0.083 - 0.003 * ms), self.r([0.040, 0.021, 0.031]), Rh), 0.02)
-        # sillon du menton
-        self.details.append(("D", Bump(hp(0.445, -0.090, -0.03), hp(0.445, -0.090, 0.03), self.r(0.006),
-                                       -self.r(0.002)), 0.0))
-        # --- fente buccale ---
-        s_c, d_c, s_f, d_f = 0.36, -0.047, 0.50, -0.039
+        c_lo = hp(0.403 + 0.004 * ms, -0.067 - 0.008 * ms)
+        g.add("U", Ellipsoid(c_lo, self.r([0.028, 0.020 + 0.003 * ms, 0.034]), Rh), 0.016)
+        g.add("U", Ellipsoid(hp(0.378, -0.086 - 0.003 * ms), self.r([0.036, 0.020, 0.028]), Rh), 0.018)
+        # sillon du menton (entre lèvre inférieure et houppe du menton)
+        self.details.append(("D", Bump(hp(0.398, -0.084, -0.024), hp(0.398, -0.084, 0.024), self.r(0.005),
+                                       -self.r(0.0018)), 0.0))
+        # philtrum discret (sillon médian de la lèvre supérieure)
+        self.details.append(("D", Bump(hp(0.438, -0.012), hp(0.446, -0.040), self.r(0.004), -self.r(0.0012),
+                                       taper=0.3), 0.0))
+        # --- fente buccale : de la commissure (s ≈ 0.355) jusqu'au-delà du bout des lèvres ---
+        s_c, d_c, s_f, d_f = 0.355, -0.052, 0.470, -0.046
         slope = (d_f - d_c) / (s_f - s_c)
         am = unit(ax + slope * dn)
         nm = unit(dn - slope * ax)
-        O = hp(0.430, d_c + slope * (0.430 - s_c))
-        A_s, A_x = self.r(0.088), self.r(0.064)
+        s_o = 0.430
+        O = hp(s_o, d_c + slope * (s_o - s_c))
+        A_s, A_x = self.r(s_o - s_c), self.r(0.060)
         tau = self.r(0.0021 + 0.0025 * ms)
-        cav_c = hp(0.405, d_c + slope * (0.405 - s_c) - 0.002)
-        cav_r = np.array([self.r(0.062), self.r(0.036), self.r(0.0225)])
+        s_cv = 0.395
+        cav_c = hp(s_cv, d_c + slope * (s_cv - s_c) - 0.003)
+        cav_r = np.array([self.r(0.050), self.r(0.032), self.r(0.0200)])
         mf = MouthFeature(O=O, am=am, xh=X, nm=nm, A_s=A_s, A_x=A_x, tau=tau, cav_c=cav_c, cav_r=cav_r)
         self.features["mouth"] = mf
         Rmo = np.stack([am, X, nm], 1)
@@ -762,9 +841,6 @@ class _Builder:
             ext = np.array([A_s + 0.01, A_s + 0.01, A_s + 0.01])
             self.openings.append(("S", Func(slit, O - ext, O + ext), 0.0012))
             self.openings.append(("S", Ellipsoid(cav_c, cav_r, Rmo), 0.004))
-        else:
-            # variante fermée : léger sillon le long de la commissure des lèvres
-            pass
 
     def eye(self, g, side, sx):
         p = self.p
@@ -782,20 +858,26 @@ class _Builder:
         v = unit(np.cross(h, gdir))
         if np.dot(v, dn) < 0:
             v = -v
-        # globe : sclère R 19 mm + cornée bombée (apex 20,4 mm) ; coque palpébrale R_in 20,8 / R_out 25 mm
-        Rg, Ri, Ro = self.r(0.0190), self.r(0.0208), self.r(0.0250)
+        # globe R 19,5 mm (+ cornée bombée) ; coque palpébrale R_in 21,2 / R_out 24,5 mm [A]
+        Rg, Ri, Ro = self.r(0.0195), self.r(0.0212), self.r(0.0245)
         ef = EyeFeature(side=side, C=C, g=gdir, h=h, v=v, R_globe=Rg, R_in=Ri, R_out=Ro,
-                        a_lat=-0.97, a_med=1.02, b_up=0.62, b_lo=0.42)
+                        a_lat=-1.00, a_med=0.98, b_up=0.66, b_lo=0.44)
         self.features[f"eye_{side}"] = ef
-        # coque palpébrale (sphère) fondue dans la tête
-        g.add("U", Sphere(C, Ro), 0.015)
-        # pli de la paupière supérieure + ride d'inquiétude
+        # coque palpébrale (sphère) : saillante, raccord serré (paupières lisibles)
+        g.add("U", Sphere(C, Ro), self.r(0.016))
+        # bourrelet de la paupière supérieure (au-dessus du bord libre) et pli palpébral
         cmid = 0.5 * (ef.a_med + ef.a_lat)
         chw = 0.5 * (ef.a_med - ef.a_lat)
-        ts = np.linspace(-0.8, 0.8, 9)
-        crease = [C + (Ro + 0.0004) * ef.direction(cmid + t * chw * 1.02, ef.beta_up(t) + 0.24) for t in ts]
+        ts = np.linspace(-0.85, 0.85, 11)
+        crease = [C + (Ro + 0.0003) * ef.direction(cmid + t * chw * 1.03, ef.beta_up(t) + 0.30) for t in ts]
         for i in range(len(crease) - 1):
-            self.details.append(("D", Bump(crease[i], crease[i + 1], self.r(0.0024), -self.r(0.0012), taper=0.01),
+            self.details.append(("D", Bump(crease[i], crease[i + 1], self.r(0.0026), -self.r(0.0011), taper=0.01),
+                                 0.0))
+        # paupière inférieure : léger pli sous le bord
+        ts = np.linspace(-0.7, 0.7, 7)
+        lower = [C + (Ro + 0.0003) * ef.direction(cmid + t * chw, -ef.beta_lo(t) - 0.30) for t in ts]
+        for i in range(len(lower) - 1):
+            self.details.append(("D", Bump(lower[i], lower[i + 1], self.r(0.0030), -self.r(0.0007), taper=0.01),
                                  0.0))
         if p.brow_worry > 0:
             a = C + 0.032 * ef.v + 0.012 * ef.h + 0.012 * ef.g
@@ -811,12 +893,14 @@ class _Builder:
             def cone(P, ef=ef):
                 d = ef.fissure_sdf(P)
                 r = np.linalg.norm(np.asarray(P, np.float64) - ef.C, axis=-1)
-                return np.maximum(d, np.maximum(ef.R_in - 0.003 - r, r - (ef.R_out + 0.009)))
+                return np.maximum(d, np.maximum(ef.R_in - 0.003 - r, r - (ef.R_out + 0.012)))
 
             cav.add("U", Func(cone, C - ext, C + ext), 0.0)
             self.openings.append(("S", cav, 0.0015))
 
     def nostrils(self, g, loft):
+        """Naseaux : ouverture en « C » (ovale échancré par le pli alaire, côté dorso-caudal), renflement du
+        cartilage alaire autour, conduit vers l'intérieur, fausse narine en creux au-dessus [A]."""
         p = self.p
         hp = self.hp
         ax = unit(self.hv(1.0, 0.0))
@@ -826,26 +910,26 @@ class _Builder:
         fn = lambda P: loft.eval(np.asarray(P, F32))
         for side, sx in (("l", -1.0), ("r", 1.0)):
             lat = np.array([sx, 0.0, 0.0])
-            o = hp(0.448, 0.004, 0.0)
-            dirn = unit(0.78 * lat + 0.55 * ax + 0.10 * dn)
+            o = hp(0.392, 0.012, 0.0)
+            dirn = unit(0.86 * lat + 0.42 * ax + 0.06 * dn)
             Nc = ray_surface(fn, o, dirn, t_max=0.12)
             if Nc is None:
                 Nc = o + 0.05 * dirn
             n_out = unit(np.asarray(_num_grad(fn, Nc), float))
-            e1 = unit(0.92 * dn - 0.30 * ax + 0.22 * lat)
+            # grand axe : vers le haut et un peu vers l'arrière (direction de la fausse narine)
+            e1 = unit(0.90 * dn - 0.32 * ax + 0.10 * lat)
             e1 = unit(e1 - np.dot(e1, n_out) * n_out)
             e2 = unit(np.cross(n_out, e1))
             if np.dot(e2, ax) < 0:
                 e2 = -e2
-            a1 = self.r(0.0240 * (1 + 0.18 * fl + 0.08 * mw))
-            a2 = self.r(0.0102 * (1 + 0.75 * fl + 0.25 * mw))
-            # renflement du naseau (cartilage alaire + diverticule) autour de l'ouverture
+            a1 = self.r(0.0235 * (1 + 0.15 * fl + 0.08 * mw))
+            a2 = self.r(0.0118 * (1 + 0.70 * fl + 0.25 * mw))
             Rn = np.stack([e1, e2, n_out], 1)
-            g.add("U", Ellipsoid(Nc - 0.006 * n_out + 0.004 * e2, self.r(np.array([0.030, 0.020, 0.012]) *
-                                                                         (1 + 0.12 * fl)), Rn), 0.014)
-            # aile (bord médial-rostral de l'ouverture, en « C »)
-            g.add("U", Ellipsoid(Nc + 0.6 * a2 * e2 + 0.002 * n_out - 0.004 * e1,
-                                 self.r(np.array([0.016, 0.0055, 0.006]) * (1 + 0.1 * fl)), Rn), 0.005)
+            # renflement de l'aile du naseau (cartilage alaire) : bourrelet en « C » autour de l'ouverture
+            g.add("U", Ellipsoid(Nc - 0.007 * n_out + 0.003 * e2, self.r(np.array([0.034, 0.024, 0.013]) *
+                                                                       (1 + 0.12 * fl)), Rn), 0.014)
+            g.add("U", Ellipsoid(Nc + 0.9 * a2 * e2 - 0.002 * n_out - 0.004 * e1,
+                                 self.r(np.array([0.020, 0.0065, 0.0075]) * (1 + 0.1 * fl)), Rn), 0.006)
             # conduit : anneaux de l'ouverture vers le fond (vers la nuque et la ligne médiane)
             inward = unit(-n_out * 0.75 - ax * 0.55 - 0.15 * lat)
             ring_c = [Nc + 0.012 * n_out, Nc - 0.006 * n_out, Nc + 0.022 * inward, Nc + 0.040 * inward,
@@ -861,13 +945,16 @@ class _Builder:
                     grp.add("U", Segment(ring_c[i], ring_c[i + 1], (a1 * s0, a1 * s1), (a2 * s0, a2 * s1),
                                          lat=e1), 0.004)
                 self.openings.append(("S", grp, 0.003))
+                # pli alaire : échancre l'ouverture côté dorso-caudal -> ouverture en « C »
+                fold_c = Nc + nf.notch_dir() * (nf.notch_depth_center()) - 0.004 * n_out
+                self.openings.append(("U", Ellipsoid(fold_c, self.r(np.array([0.0105, 0.0068, 0.012])),
+                                                     np.stack([nf.notch_tan(), nf.notch_dir(), n_out], 1)), 0.003))
             else:
                 self.details.append(("S", Segment(Nc + 0.010 * n_out, Nc - 0.002 * n_out, (a1 * 0.9, a1 * 0.9),
                                                   (a2 * 0.8, a2 * 0.8), lat=e1), 0.004))
-            # fausse narine : léger creux au-dessus/latéral de l'ouverture
-            self.details.append(("D", BlobBump(Nc + 0.014 * e1 + 0.004 * lat * 0, self.r(np.array([0.008, 0.008,
-                                                                                                    0.008])),
-                                               -self.r(0.0015)), 0.0))
+            # fausse narine : creux au-dessus / en arrière de l'ouverture
+            self.details.append(("D", BlobBump(Nc + 0.026 * e1 - 0.006 * e2, self.r(np.array([0.010, 0.010, 0.010])),
+                                               -self.r(0.0018)), 0.0))
             # rides du naseau (micro-détail)
             if p.micro_detail > 0:
                 for i in range(3):
@@ -941,11 +1028,11 @@ class _Builder:
         (0.285, 0.034, 0.031, 0.030, 0.025, 2.3, "front_cannon"),
         (0.230, 0.033, 0.030, 0.028, 0.023, 2.3, "front_cannon"),
         (0.185, 0.035, 0.034, 0.030, 0.025, 2.25, "front_cannon"),
-        (0.155, 0.040, 0.049, 0.040, 0.039, 2.1, "front_pastern"),
-        (0.128, 0.040, 0.053, 0.040, 0.039, 2.1, "front_pastern"),
-        (0.100, 0.036, 0.042, 0.036, 0.035, 2.1, "front_pastern"),
-        (0.075, 0.038, 0.043, 0.040, 0.040, 2.15, "front_pastern"),
-        (0.050, 0.044, 0.052, 0.048, 0.048, 2.3, "front_hoof"),
+        (0.155, 0.042, 0.051, 0.042, 0.041, 2.1, "front_pastern"),
+        (0.128, 0.042, 0.055, 0.042, 0.041, 2.1, "front_pastern"),
+        (0.100, 0.038, 0.044, 0.038, 0.037, 2.1, "front_pastern"),
+        (0.075, 0.040, 0.045, 0.042, 0.042, 2.15, "front_pastern"),
+        (0.050, 0.046, 0.054, 0.050, 0.050, 2.3, "front_hoof"),
     ]
     HIND_PROFILE = [
         (1.120, 0.140, 0.150, 0.020, 0.135, 2.0, "hips"),
@@ -964,11 +1051,11 @@ class _Builder:
         (0.330, 0.034, 0.048, 0.031, 0.025, 2.3, "hind_cannon"),
         (0.260, 0.029, 0.042, 0.029, 0.022, 2.3, "hind_cannon"),
         (0.200, 0.030, 0.044, 0.030, 0.023, 2.25, "hind_cannon"),
-        (0.160, 0.037, 0.058, 0.040, 0.039, 2.1, "hind_pastern"),
-        (0.130, 0.037, 0.070, 0.040, 0.038, 2.1, "hind_pastern"),
-        (0.100, 0.035, 0.054, 0.036, 0.035, 2.1, "hind_pastern"),
-        (0.075, 0.036, 0.048, 0.039, 0.038, 2.15, "hind_pastern"),
-        (0.052, 0.039, 0.055, 0.046, 0.046, 2.3, "hind_hoof"),
+        (0.160, 0.039, 0.060, 0.042, 0.041, 2.1, "hind_pastern"),
+        (0.130, 0.039, 0.071, 0.042, 0.040, 2.1, "hind_pastern"),
+        (0.100, 0.037, 0.055, 0.038, 0.037, 2.1, "hind_pastern"),
+        (0.075, 0.038, 0.049, 0.041, 0.040, 2.15, "hind_pastern"),
+        (0.052, 0.041, 0.056, 0.048, 0.048, 2.3, "hind_hoof"),
     ]
     # Axes des membres du gabarit d'ORIGINE (avant l'élargissement des aplombs) : les coordonnées absolues des
     # reliefs de détail (châtaignes, ergots, olécrane…) ont été saisies dans ce repère ; `legdx` les recale [I].
@@ -1045,18 +1132,14 @@ class _Builder:
         wv = unit(np.cross(e, latv))
         Rsc = np.stack([e, wv, unit(np.cross(e, wv))], 1)
         c = 0.46 * S0 + 0.54 * Sh + latv * (-0.040 + dl + 0.004 * max(fat, 0)) * self.k - wv * 0.012 * self.k
-        sg.add("U", Ellipsoid(c, self.r(np.array([0.200, 0.120, 0.078]) * [1, 1, rm]), Rsc))
+        sg.add("U", Ellipsoid(c, self.r(np.array([0.210, 0.125, 0.072]) * [1, 1, rm]), Rsc))
         # brachio-céphalique + base de l'encolure : comble la transition encolure → pointe de l'épaule
         a = P_("upperarm", 0.118 + dl, 0.598, 0.950)
         b2 = M.p("neck_02", L(0.062, 0.705, 1.160))
         e3 = unit(b2 - a)
         w3 = unit(np.cross(e3, latv))
         Rb = np.stack([e3, w3, unit(np.cross(e3, w3))], 1)
-        sg.add("U", Ellipsoid(0.55 * a + 0.45 * b2, self.r(np.array([0.150, 0.070, 0.048]) * [1, 1, rm]), Rb), 0.05)
-        # trapèze / rhomboïde : relie la crête de l'encolure au garrot et au cartilage de l'omoplate
-        a = self.tp(0.250, 1.215, 0.050, sx)
-        b2 = M.p("neck_02", L(0.058, 0.560, 1.250))
-        sg.add("U", Segment(a, b2, (self.r(0.050), self.r(0.045)), (self.r(0.060), self.r(0.050))), 0.05)
+        sg.add("U", Ellipsoid(0.50 * a + 0.50 * b2, self.r(np.array([0.150, 0.072, 0.034]) * [1, 1, rm]), Rb), 0.08)
         # cartilage de l'omoplate + rhomboïde/trapèze thoracique : comble la transition garrot → base de l'encolure
         sg.add("U", Ellipsoid(self.tp(0.385, 1.125, 0.098 + dl * 0.5, sx), self.r(np.array([0.066, 0.140, 0.095]))), 0.06)
         # pointe de l'épaule (tubercule majeur)
@@ -1073,9 +1156,9 @@ class _Builder:
         amp = self.r(0.0020 + 0.0030 * mus - 0.0015 * max(fat, 0))
         self.details.append(("D", Bump(0.80 * S0 + 0.20 * Sh + latv * 0.055 * self.k,
                                        0.25 * S0 + 0.75 * Sh + latv * 0.062 * self.k - wv * 0.01 * self.k,
-                                       self.r(0.012), amp, taper=0.3), 0.0))
+                                       self.r(0.024), 0.6 * amp, taper=0.35), 0.0))
         self.details.append(("D", Bump(P_("upperarm", 0.190 + dl, 0.540, 0.900), P_("upperarm", 0.192 + dl, 0.430, 0.790),
-                                       self.r(0.010), -self.r(0.0018 + 0.002 * mus), taper=0.3), 0.0))
+                                       self.r(0.020), -self.r(0.0010 + 0.002 * mus), taper=0.35), 0.0))
         # olécrane (pointe du coude)
         g.add("U", Ellipsoid(P_("forearm", 0.142, 0.358, 0.752), self.r([0.024, 0.024, 0.030])), 0.03)
         # avant-bras : extenseur radial du carpe (devant), fléchisseurs (derrière) — reliefs discrets
@@ -1121,10 +1204,10 @@ class _Builder:
         # [A] sabot de poney : large, haut, peu évasé (anatomy.md §2.4 : 10–12 cm de large à l'avant)
         if front:
             bone = f"front_hoof_{side}"
-            Lf, Lb, W0, Ht, Hh, at, ah, flare, ex, tn = 0.063, 0.056, 0.0590, 0.072, 0.042, 54.0, 64.0, 0.17, 2.25, 0.04
+            Lf, Lb, W0, Ht, Hh, at, ah, flare, ex, tn = 0.066, 0.058, 0.0615, 0.076, 0.044, 54.0, 64.0, 0.17, 2.25, 0.04
         else:
             bone = f"hind_hoof_{side}"
-            Lf, Lb, W0, Ht, Hh, at, ah, flare, ex, tn = 0.061, 0.055, 0.0560, 0.073, 0.044, 56.0, 65.0, 0.15, 2.1, 0.12
+            Lf, Lb, W0, Ht, Hh, at, ah, flare, ex, tn = 0.064, 0.057, 0.0585, 0.077, 0.046, 56.0, 65.0, 0.15, 2.1, 0.12
         toe_ref = M.rt(bone)
         Lf, Lb, W0, Ht, Hh = (v * hsz * self.k for v in (Lf, Lb, W0, Ht, Hh))
         toe = M.p(bone, toe_ref)
@@ -1194,10 +1277,10 @@ class _Builder:
                                            self.r(0.004 * rb)), 0.0))
         # sillon du biceps fémoral / semi-tendineux (face latérale de la cuisse)
         self.details.append(("D", Bump(M.p("hips", L(0.150, -0.690, 1.060)), P_("gaskin", 0.168, -0.630, 0.720),
-                                       self.r(0.011), -self.r(0.0025 + 0.003 * mus), taper=0.3), 0.0))
+                                       self.r(0.020), -self.r(0.0015 + 0.003 * mus), taper=0.3), 0.0))
         # sillon entre biceps fémoral et vaste latéral (devant)
         self.details.append(("D", Bump(P_("thigh", 0.200, -0.520, 1.020), P_("thigh", 0.200, -0.450, 0.830),
-                                       self.r(0.012), -self.r(0.0018 + 0.002 * mus), taper=0.3), 0.0))
+                                       self.r(0.020), -self.r(0.0012 + 0.002 * mus), taper=0.3), 0.0))
         # gastrocnémien : relief à l'arrière haut de la jambe
         self.details.append(("D", BlobBump(P_("gaskin", 0.150, -0.640, 0.650), self.r(np.array([0.030, 0.030, 0.060])),
                                            self.r(0.003 * rm)), 0.0))
@@ -1254,7 +1337,7 @@ class _Builder:
 
 
 FACE_S0 = 0.18      # abscisse (m, repère tête) au-delà de laquelle la face est raccourcie
-FACE_K = 0.93       # [A] raccourcissement de base de la face (tête type Welsh, ≈ 0,40 WH)
+FACE_K = 0.975      # [A] abscisses de la tête déjà finales (tête type Welsh) ; head_short raccourcit la face
 
 
 def face_s(s, head_short=0.0):

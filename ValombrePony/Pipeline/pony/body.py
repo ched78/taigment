@@ -507,9 +507,10 @@ class Surgery:
         C = face_centers(bm)
         D = C - nf.Nc
         q1, q2, q3 = D @ nf.e1, D @ nf.e2, D @ nf.n_out
-        mask = ((q1 / nf.a1) ** 2 + (q2 / nf.a2) ** 2 < 1.0) & (np.abs(q3) < 0.015)
+        phq = np.arctan2(q2 / nf.a2, q1 / nf.a1)
+        mask = ((q1 / nf.a1) ** 2 + (q2 / nf.a2) ** 2 < nf.outline_factor(phq) ** 2) & (np.abs(q3) < 0.015)
         phi = np.linspace(0, 2 * np.pi, 128, endpoint=False)
-        T0 = nf.Nc + nf.a1 * np.cos(phi)[:, None] * nf.e1 + nf.a2 * np.sin(phi)[:, None] * nf.e2
+        T0 = nf.outline(phi)                      # contour en « C » (pli alaire)
         T = self.sc.project(T0, iters=6)
         loop = self._cut(mask, T, f"nostril_{side}")
         n = len(loop)
@@ -528,7 +529,9 @@ class Surgery:
             if np.dot(u2, nf.e2) < 0:
                 u2 = -u2
             s = nf.ring_s[k]
-            vs = [bm.verts.new(c + s * (nf.a1 * math.cos(a) * u1 + nf.a2 * math.sin(a) * u2)) for a in ang]
+            fk = nf.outline_factor(ang) if k == 1 else np.ones(len(ang))   # 1er anneau : encore en « C »
+            vs = [bm.verts.new(c + s * f * (nf.a1 * math.cos(a) * u1 + nf.a2 * math.sin(a) * u2))
+                  for a, f in zip(ang, fk)]
             rings.append(vs)
         for k in range(len(rings) - 1):
             a, b = rings[k], rings[k + 1]

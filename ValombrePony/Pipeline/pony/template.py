@@ -71,12 +71,12 @@ _HIND_L = [
     ("hind_hoof_l", "hind_pastern_l", (-0.127, -0.532, 0.046), (-0.127, -0.467, 0.0)),  # x −0.11
 ]
 _FRONT_L = [
-    ("scapula_l", "spine_03", (-0.07, 0.33, 1.20), (-0.175, 0.58, 0.89)),
-    ("upperarm_l", "scapula_l", (-0.175, 0.58, 0.89), (-0.155, 0.42, 0.71)),            # x −0.16
-    ("forearm_l", "upperarm_l", (-0.155, 0.42, 0.71), (-0.140, 0.42, 0.35)),            # x −0.14
-    ("front_cannon_l", "forearm_l", (-0.140, 0.42, 0.35), (-0.132, 0.42, 0.137)),       # x −0.125
-    ("front_pastern_l", "front_cannon_l", (-0.132, 0.42, 0.137), (-0.132, 0.496, 0.046)),  # x −0.115
-    ("front_hoof_l", "front_pastern_l", (-0.132, 0.496, 0.046), (-0.132, 0.565, 0.0)),  # x −0.115
+    ("scapula_l", "spine_03", (-0.07, 0.33, 1.20), (-0.183, 0.58, 0.89)),
+    ("upperarm_l", "scapula_l", (-0.183, 0.58, 0.89), (-0.165, 0.42, 0.71)),            # x −0.16
+    ("forearm_l", "upperarm_l", (-0.165, 0.42, 0.71), (-0.150, 0.42, 0.35)),            # x −0.14
+    ("front_cannon_l", "forearm_l", (-0.150, 0.42, 0.35), (-0.142, 0.42, 0.137)),       # x −0.125
+    ("front_pastern_l", "front_cannon_l", (-0.142, 0.42, 0.137), (-0.142, 0.496, 0.046)),  # x −0.115
+    ("front_hoof_l", "front_pastern_l", (-0.142, 0.496, 0.046), (-0.142, 0.565, 0.0)),  # x −0.115
 ]
 
 
@@ -106,7 +106,7 @@ def eye_axes(sign: float):
 
 def _eye(side: str, sign: float):
     # Centre du globe : ajusté au maillage du corps (body_sdf), cf. rapport de l'agent « body ».
-    c = np.array(head_point(0.17, 0.02, sign * 0.080))
+    c = np.array(head_point(0.16, 0.025, sign * 0.085))
     gh, _ = eye_axes(sign)
     rnd = lambda v: tuple(float(round(x, 4)) for x in v)
     return [
@@ -117,9 +117,9 @@ def _eye(side: str, sign: float):
 
 
 def _ear(side: str, sign: float):
-    base = head_point(0.0, 0.07, sign * 0.055)
-    mid = (base[0] + sign * 0.010, base[1] + 0.015, base[2] + 0.065)
-    tip = (base[0] + sign * 0.015, base[1] + 0.025, base[2] + 0.13)
+    base = head_point(0.0, 0.07, sign * 0.058)
+    mid = (base[0] + sign * 0.012, base[1] + 0.016, base[2] + 0.058)
+    tip = (base[0] + sign * 0.016, base[1] + 0.030, base[2] + 0.118)
     return [(f"ear_{side}", "head", base, mid), (f"ear_tip_{side}", f"ear_{side}", mid, tip)]
 
 
